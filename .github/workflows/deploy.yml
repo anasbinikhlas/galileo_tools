@@ -17,11 +17,13 @@ jobs:
         with: 
           node-version: '20'
 
-      # 2. Build React Frontend (Isolated to /frontend folder)
+# 2. Build React Frontend (Isolated to /frontend folder)
       - name: Build React Frontend
         working-directory: ./frontend
         run: |
-          npm install
+          # Use 'npm ci' instead of 'npm install' for production CI/CD
+          # This ensures an exact match to your package-lock.json
+          npm ci
           npm run build
 
       # 3. Move build output to backend/public folder
