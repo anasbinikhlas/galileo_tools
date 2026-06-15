@@ -24,9 +24,12 @@ jobs:
           npm ci
           npm run build
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
+      - name: FTP Deploy (Frontend SPA)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          name: frontend-build
-          path: frontend/dist/
-          retention-days: 7
+          server: ftp.omaanu.com
+          username: u408469790.galileodeploy
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21
+          local-dir: ./frontend/dist/
+          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/public/
