@@ -1,0 +1,39 @@
+name: Build and Deploy to Hostinger
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 1. Setup Node for React
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 2. Install dependencies and build frontend
+      - name: Build Project
+        run: |
+          npm install
+          npm run build
+
+      # 3. Deploy to Hostinger via FTP
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftp.omaanu.com
+          username: u408469790.galileodeploy
+          password: ${{ secrets.FTP_PASSWORD }}
+          # This represents your project root on the server
+          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
+          # Exclude git and env files for security
+          exclude: |
+            **/.git*
+            **/.git*/**
+            .env
