@@ -11,28 +11,34 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. Setup Node for React
+      # 1. Setup Node
       - name: Setup Node.js
         uses: actions/setup-node@v4
-        with:
+        with: 
           node-version: '20'
 
-      # 2. Install dependencies and build frontend
-      - name: Build Project
+      # 2. Build React Frontend (Isolated to /frontend folder)
+      - name: Build React Frontend
+        working-directory: ./frontend
         run: |
           npm install
           npm run build
 
-      # 3. Deploy to Hostinger via FTP
+      # 3. Move build output to backend/public folder
+      - name: Move Build to Backend
+        run: |
+          cp -r ./frontend/dist/* ./backend/public/
+
+      # 4. Deploy via FTP
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ftp.omaanu.com
           username: u408469790.galileodeploy
           password: ${{ secrets.FTP_PASSWORD }}
-          # This represents your project root on the server
+          # Deploy only the backend folder
+          local-dir: ./backend/
           server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
-          # Exclude git and env files for security
           exclude: |
             **/.git*
             **/.git*/**
