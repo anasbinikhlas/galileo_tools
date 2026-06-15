@@ -38,7 +38,7 @@ jobs:
           protocol: ftps
           port: 21
           local-dir: ./backend/public/
-          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
+          server-dir: /home/u408469790/domains/galileotools.omaanu.com/public_html/
           passive: true
           exclude: |
             **/.git*
