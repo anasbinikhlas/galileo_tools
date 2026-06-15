@@ -29,15 +29,13 @@ jobs:
           mkdir -p ./backend/public
           cp -r ./frontend/dist/* ./backend/public/
 
-      - name: FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Deploy via SFTP (SCP)
+        uses: appleboy/scp-action@master
         with:
-          server: ftp.omaanu.com
+          host: ftp.omaanu.com
           username: u408469790.galileodeploy
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./backend/public/
-          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            .env
+          port: 22
+          source: "backend/public/*"
+          target: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
+          rm: true
