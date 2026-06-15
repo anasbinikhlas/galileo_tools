@@ -24,12 +24,7 @@ jobs:
           npm ci
           npm run build
 
-      - name: Move Build to Backend
-        run: |
-          mkdir -p ./backend/public
-          cp -r ./frontend/dist/. ./backend/public/
-
-      - name: FTP Deploy (FTPS / Passive)
+      - name: FTP Deploy (Frontend SPA)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ftp.omaanu.com
@@ -37,9 +32,8 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
-          local-dir: ./backend/public/
+          local-dir: ./frontend/dist/
           server-dir: /home/u408469790/domains/galileotools.omaanu.com/public_html/
-          passive: true
           exclude: |
             **/.git*
             **/.git*/**
