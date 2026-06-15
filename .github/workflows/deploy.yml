@@ -27,7 +27,7 @@ jobs:
       - name: Move Build to Backend
         run: |
           mkdir -p ./backend/public
-          cp -r ./frontend/dist/* ./backend/public/
+          cp -r ./frontend/dist/. ./backend/public/
 
       - name: FTP Deploy (FTPS / Passive)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
