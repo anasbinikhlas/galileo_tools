@@ -24,15 +24,16 @@ jobs:
           npm ci
           npm run build
 
-      - name: 📂 Sync files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: 🚀 Deploy via SFTP (Secure Copy)
+        uses: appleboy/scp-action@v0.1.7
         with:
-          server: ftp.omaanu.com
-          # IMPORTANT: Use the exact string as shown in your hPanel
-          username: u408469790.galileotool
+          host: 46.28.45.64
+          username: u408469790
           password: ${{ secrets.FTP_PASSWORD }}
-          # Use ./ to match your working project structure
-          server-dir: ./
-          local-dir: ./frontend/dist/
-          port: 21
-          protocol: ftp
+          port: 22
+          # This copies the contents of the dist folder to your target
+          source: "./frontend/dist/*"
+          # This is the destination folder on your server
+          target: "/home/u408469790/domains/omaanu.com/public_html/galileotool/"
+          # strip_components removes the source path folders so files land directly in galileotool
+          strip_components: 2
