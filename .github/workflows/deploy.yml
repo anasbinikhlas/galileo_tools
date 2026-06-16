@@ -29,6 +29,8 @@ jobs:
           server: ftp.omaanu.com
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp    # We are using plain FTP first to rule out security layer errors
-          server-dir: /    # Since you created the user for this specific folder, it is root
+          protocol: ftp 
+          security: loose
+          server-dir: /
           local-dir: ./frontend/dist/
+          passive: true # Add this line
