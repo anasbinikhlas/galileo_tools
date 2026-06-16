@@ -13,22 +13,31 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Create frontend .env
+        working-directory: ./frontend
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" >> .env
+          echo "VITE_GEMINI_API_KEY=${{ secrets.VITE_GEMINI_API_KEY }}" >> .env
 
       - name: Build React Frontend
         working-directory: ./frontend
         run: |
           npm ci
           npm run build
+
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ftp.omaanu.com
+          server: omaanu.com
           username: u408469790.galileotool
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
+          protocol: ftp
+          port: 21
           local-dir: ./frontend/dist/
           server-dir: /home/u408469790/domains/omaanu.com/public_html/galileotools/
-          timeout: 60000
+          timeout: 120000
+          dangerous-clean-slate: false
