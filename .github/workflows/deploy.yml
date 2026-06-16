@@ -34,4 +34,4 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
           local-dir: ./frontend/dist/
-          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileodeploy/
+          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileotools/
