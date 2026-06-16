@@ -30,11 +30,11 @@ jobs:
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ftp.omaanu.com
-          # Ensure this secret is set to exactly: u408469790.galileodeploy
-          username: ${{ secrets.FTP_USERNAME }} 
+          username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
-          security: ftps
-          # Using root directory relative to the FTP user's jail
-          server-dir: / 
+          # "loose" allows the connection to bypass strict SSL certificate 
+          # checks often required by shared hosting environments.
+          security: loose
+          server-dir: /
           local-dir: ./frontend/dist/
