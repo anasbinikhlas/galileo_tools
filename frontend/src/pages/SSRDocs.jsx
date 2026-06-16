@@ -12,7 +12,7 @@ const api = axios.create({
   withCredentials: false,
 })
 
-// ── COMPILATION SAFE CDN SCRIPT INJECTOR ──
+// ── COMPILATION SAFE CDN SCRIPT INJECTORr ──
 const loadScript = (src) => {
   return new Promise((resolve) => {
     if (document.querySelector(`script[src="${src}"]`)) {
