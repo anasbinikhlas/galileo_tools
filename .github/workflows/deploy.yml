@@ -24,7 +24,7 @@ jobs:
           npm ci
           npm run build
 
-     - name: 🚀 Deploy via SFTP (Secure Copy)
+     -  name: 🚀 Deploy via SFTP (Secure Copy)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 46.28.45.64
