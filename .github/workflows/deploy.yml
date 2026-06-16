@@ -29,16 +29,17 @@ jobs:
           npm ci
           npm run build
 
-      - name: Deploy via FTPS passive mode
+      - name: Deploy via FTPS
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: omaanu.com
+          server: ftp.omaanu.com
           username: u408469790.galileotool
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
           local-dir: ./frontend/dist/
-          server-dir: /home/u408469790/domains/omaanu.com/public_html/galileotools/
+          # Must be / because the FTP account is jailed to this folder
+          server-dir: / 
           timeout: 120000
           dangerous-clean-slate: false
           security: loose
