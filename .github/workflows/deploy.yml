@@ -33,5 +33,6 @@ jobs:
           username: u408469790.galileodeploy
           password: ${{ secrets.FTP_PASSWORD }}
           port: 21
+          protocol: ftps
           local-dir: ./frontend/dist/
           server-dir: /home/u408469790/domains/omaanu.com/public_html/galileotools/
