@@ -1,11 +1,11 @@
-name: Build and Deploy
+name: Build and Push
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: 🚚 Get latest code
@@ -18,19 +18,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
 
-      - name: 🛠️ Install dependencies and Build
+      - name: 🛠️ Install and Build
         working-directory: ./frontend
         run: |
           npm ci
           npm run build
-
-      - name: 🚀 Deploy via SFTP (Secure Copy)
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 46.28.45.64
-          username: u408469790
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 65002
-          source: "./frontend/dist/*"
-          target: "/home/u408469790/domains/omaanu.com/public_html/galileotool/"
-          strip_components: 2
