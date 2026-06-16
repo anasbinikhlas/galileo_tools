@@ -22,14 +22,13 @@ jobs:
         run: |
           npm ci
           npm run build
-
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ftp.omaanu.com
           username: u408469790.galileotool
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
+          protocol: ftp
           local-dir: ./frontend/dist/
           server-dir: /home/u408469790/domains/omaanu.com/public_html/galileotools/
           timeout: 60000
