@@ -24,16 +24,14 @@ jobs:
           npm ci
           npm run build
 
-      - name: 🚀 Deploy via SFTP (Secure Copy)
+     - name: 🚀 Deploy via SFTP (Secure Copy)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 46.28.45.64
           username: u408469790
           password: ${{ secrets.FTP_PASSWORD }}
-          port: 22
-          # This copies the contents of the dist folder to your target
+          # Use the non-standard port provided by Hostinger
+          port: 65002
           source: "./frontend/dist/*"
-          # This is the destination folder on your server
           target: "/home/u408469790/domains/omaanu.com/public_html/galileotool/"
-          # strip_components removes the source path folders so files land directly in galileotool
           strip_components: 2
