@@ -109,9 +109,9 @@ const copyToClipboard = (text) => {
 
 function Topbar({ title, subtitle }) {
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <header className="bg-white border-b border-gray-200 px-4 py-4 sm:px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight flex flex-wrap items-center gap-2">
           <i className="ti ti-plane-departure text-indigo-600" />
           {title}
         </h1>
@@ -700,7 +700,7 @@ export default function App() {
 
         {/* ── Input method tabs ── */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-input-search text-lg" aria-hidden="true" />
               Input method
@@ -717,7 +717,7 @@ export default function App() {
           </div>
 
           {/* Tab buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-50 p-2 rounded-xl border border-gray-200">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-gray-50 p-2 rounded-xl border border-gray-200">
             <div className="flex flex-wrap gap-1">
               <button
                 onClick={() => setActiveTab('write')}
@@ -756,7 +756,7 @@ export default function App() {
 
             {/* Target Passenger Selector for Scanning */}
             {activeTab !== 'write' && (
-              <div className="flex items-center gap-2 px-2 py-1 bg-white border border-gray-200 rounded-lg shadow-inner text-xs">
+              <div className="flex items-center gap-2 px-2 py-1 bg-white border border-gray-200 rounded-lg shadow-inner text-xs w-full sm:w-auto">
                 <span className="font-bold text-gray-500 text-[10px] uppercase">Scan Target:</span>
                 <select 
                   value={targetPassengerIndex}
@@ -792,14 +792,14 @@ export default function App() {
               <div className="flex gap-2 justify-center p-3 bg-gray-900 border-t border-gray-800">
                 <button 
                   onClick={capturePhoto} 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs px-4 py-2 rounded-lg flex flex-col sm:flex-row items-center gap-1.5 w-full sm:w-auto justify-center"
                 >
                   <i className="ti ti-camera text-sm" />
                   Capture & Parse to Passenger #{targetPassengerIndex + 1}
                 </button>
                 <button 
                   onClick={stopCamera} 
-                  className="bg-gray-700 hover:bg-gray-600 text-white font-medium text-xs px-4 py-2 rounded-lg flex items-center gap-1.5"
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-medium text-xs px-4 py-2 rounded-lg flex flex-col sm:flex-row items-center gap-1.5 w-full sm:w-auto justify-center"
                 >
                   <i className="ti ti-x text-sm" />
                   Cancel
@@ -818,8 +818,8 @@ export default function App() {
 
           {/* Preview image with Delete Action */}
           {previewImg && !cameraOpen && (
-            <div className="flex items-center justify-between gap-4 bg-gray-50 border border-gray-200 p-3 rounded-lg shadow-sm animate-fade-in">
-              <div className="flex items-center gap-4 min-w-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gray-50 border border-gray-200 p-3 rounded-lg shadow-sm animate-fade-in">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-0 w-full">
                 <img
                   src={previewImg}
                   alt="Passport source file preview"
@@ -854,7 +854,7 @@ export default function App() {
               type="text"
               value={rawInput}
               onChange={(e) => handleInput(e.target.value)}
-              placeholder="SV PAK KZ1342592 M 12MAY95 20JAN35 IKHLAS/ANAS BIN MR"
+              placeholder="AIRLINE COUNTRY PASPPORT GENDER DOB EXPIRY LAST NAME/FIRST NAME"
               className={`w-full text-sm px-3.5 py-3 border rounded-xl bg-gray-50
                 font-mono tracking-wide focus:outline-none focus:bg-white transition-all shadow-inner
                 ${rawInput
@@ -918,7 +918,7 @@ export default function App() {
 
         {/* ── Passengers ── */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-users text-lg" aria-hidden="true" />
               Passengers details ({paxList.length})
@@ -1008,8 +1008,8 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
     <div className={`rounded-xl border p-4 transition-all shadow-sm ${
       complete ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 bg-white'
     }`}>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5 pb-2 border-b border-gray-100">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 mb-3.5 pb-2 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded font-mono">
             Passenger #{index + 1}
           </span>
@@ -1025,10 +1025,10 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
         </div>
 
         {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+        <div className="flex flex-col gap-2 text-xs font-semibold sm:flex-row sm:flex-wrap sm:items-center">
           <button
             onClick={() => onCameraShortcut(index)}
-            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded"
+            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded w-full sm:w-auto justify-center"
             title="Open camera to capture passport"
           >
             <i className="ti ti-camera" />
@@ -1065,7 +1065,7 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Surname"          value={pax.surname} onChange={(v) => onUpdate(index, 'surname', v)} />
         <Field label="Given name"       value={pax.given}   onChange={(v) => onUpdate(index, 'given', v)} />
         <Field label="Passport no."     value={pax.ppnum}   onChange={(v) => onUpdate(index, 'ppnum', v)} />
