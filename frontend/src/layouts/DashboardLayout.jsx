@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
+import { logout } from '../auth'
 
 export default function DashboardLayout() {
+  const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === '1' } catch (e) { return false }
@@ -60,6 +62,10 @@ export default function DashboardLayout() {
           onToggleCollapse={() => setCollapsed(c => !c)}
           sidebarOpen={sidebarOpen}
           onToggleOpen={() => setSidebarOpen(s => !s)}
+          onLogout={() => {
+            logout()
+            navigate('/login', { replace: true })
+          }}
         />
 
         <Outlet />

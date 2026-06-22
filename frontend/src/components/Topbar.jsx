@@ -1,4 +1,4 @@
-export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, sidebarOpen, onToggleOpen }) {
+export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, sidebarOpen, onToggleOpen, onLogout }) {
   return (
     <header className="h-12 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-5">
       <div className="flex items-center gap-2">
@@ -28,6 +28,16 @@ export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, s
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             <i className={`ti ${collapsed ? 'ti-chevron-right' : 'ti-chevron-left'}`} />
+          </button>
+        )}
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="hidden md:inline-flex items-center gap-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-sm text-red-700 hover:bg-red-100"
+          >
+            <i className="ti ti-logout" aria-hidden="true" />
+            Logout
           </button>
         )}
         <span className="text-xs text-gray-400 hidden md:flex items-center gap-1">
