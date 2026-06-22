@@ -40,8 +40,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
-        # SSH_KNOWN_HOSTS secret = output of:
-        # ssh-keyscan -p 65002 your.host.com
 
       - name: 📦 Deploy frontend dist to server
         run: |
