@@ -4,9 +4,14 @@ on:
   push:
     branches: [ "main" ]
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy-frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: 🚚 Get latest code
         uses: actions/checkout@v4
@@ -23,21 +28,34 @@ jobs:
         run: |
           npm ci
           npm run build
+          echo "--- Local build output (frontend/dist) ---"
+          ls -la dist
 
       - name: 🔑 Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: 🔒 Trust known host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+        # SSH_KNOWN_HOSTS secret = output of:
+        # ssh-keyscan -p 65002 your.host.com
+
       - name: 📦 Deploy frontend dist to server
         run: |
           rsync -avz --delete \
-            -e "ssh -p 65002 -o StrictHostKeyChecking=no" \
+            -e "ssh -p 65002" \
             ./frontend/dist/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/
+          echo "--- Remote check (server dist folder) ---"
+          ssh -p 65002 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "ls -la /home/u408469790/public_html/galileotools/frontend/dist/"
 
   deploy-backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: 🚚 Get latest code
         uses: actions/checkout@v4
@@ -47,13 +65,22 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: 🔒 Trust known host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
       - name: 📦 Deploy backend to server
         run: |
           rsync -avz --delete \
             --exclude='.env' \
             --exclude='storage/' \
             --exclude='vendor/' \
-            -e "ssh -p 65002 -o StrictHostKeyChecking=no" \
+            --exclude='public/storage' \
+            --exclude='bootstrap/cache/' \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            -e "ssh -p 65002" \
             ./backend/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/backend/
 
@@ -65,9 +92,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 65002
           script: |
+            set -e
             cd /home/u408469790/public_html/galileotools/backend
             composer install --no-dev --optimize-autoloader
+            php artisan config:clear
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
+            php artisan storage:link || true
+            chmod -R 775 storage bootstrap/cache
