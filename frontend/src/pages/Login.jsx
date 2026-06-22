@@ -24,9 +24,8 @@ export default function Login() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-lg shadow-slate-200/80">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold text-slate-900">Login to GalileoTools</h1>
-          <p className="text-sm text-slate-500 mt-2">Use the seeded repo credentials to continue.</p>
-        </div>
+          <h1 className="text-2xl font-semibold text-slate-900">Login to Tools</h1>
+          </div>
 
         {error && (
           <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
