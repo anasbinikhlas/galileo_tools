@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import Topbar from '../components/Topbar'
 
 const tools = [
   {
@@ -37,9 +36,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
 
   return (
-    <>
-      <Topbar title="Dashboard" subtitle="— GalileoTools" />
-      <main className="flex-1 overflow-y-auto p-5">
+    <main className="flex-1 overflow-y-auto p-5">
         <div className="mb-6">
           <h1 className="text-base font-semibold text-gray-900">Welcome to GalileoTools</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -76,6 +73,5 @@ export default function Dashboard() {
           ))}
         </div>
       </main>
-    </>
   )
 }
