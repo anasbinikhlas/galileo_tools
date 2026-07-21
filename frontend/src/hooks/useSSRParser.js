@@ -143,7 +143,7 @@ export function useSSRParser() {
   }, [])
 
   const addPax = useCallback(() => {
-    setPaxList((prev) => [...prev, { ...emptyPax(), nat: prev[0]?.nat || '', issuer: prev[0]?.issuer || '' }])
+    setPaxList((prev) => [{ id: 'pax_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), ...emptyPax(), nat: prev[0]?.nat || '', issuer: prev[0]?.issuer || '' }, ...prev])
   }, [])
 
   const removePax = useCallback((index) => {

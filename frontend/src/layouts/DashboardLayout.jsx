@@ -41,27 +41,14 @@ export default function DashboardLayout() {
         />
       )}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile small header with menu toggle */}
-        <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 md:hidden">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 hover:bg-gray-100"
-          >
-            <i className="ti ti-menu-2 text-lg" aria-hidden="true" />
-            <span className="sr-only">Open sidebar</span>
-          </button>
-          <span className="text-sm font-semibold text-gray-900">GalileoTools</span>
-          <div className="w-8" />
-        </div>
-
         <Topbar
-          title=""
-          subtitle=""
+          title="GalileoTools"
+          subtitle="Travel Office Suite"
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}
           sidebarOpen={sidebarOpen}
           onToggleOpen={() => setSidebarOpen(s => !s)}
+          onToggleMobileSidebar={() => setSidebarOpen(true)}
           onLogout={() => {
             logout()
             navigate('/login', { replace: true })

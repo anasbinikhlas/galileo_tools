@@ -1,8 +1,19 @@
-export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, sidebarOpen, onToggleOpen, onLogout }) {
+export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, sidebarOpen, onToggleOpen, onLogout, onToggleMobileSidebar }) {
   return (
-    <header className="h-12 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-5">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-900">{title}</span>
+    <header className="h-12 shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-5">
+      <div className="flex items-center gap-2.5">
+        {onToggleMobileSidebar && (
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="md:hidden inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-1.5 text-gray-700 hover:bg-gray-50"
+            title="Open sidebar"
+          >
+            <i className="ti ti-menu-2 text-base" aria-hidden="true" />
+            <span className="sr-only">Open sidebar</span>
+          </button>
+        )}
+        <span className="text-sm font-semibold text-gray-900">{title || 'GalileoTools'}</span>
         {subtitle && (
           <span className="text-xs text-gray-400 hidden sm:inline">{subtitle}</span>
         )}

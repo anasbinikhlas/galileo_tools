@@ -8,6 +8,12 @@ const tools = [
     ready: true,
   },
   {
+    path: '/package',
+    icon: 'ti-package',
+    label: 'Package',
+    ready: true,
+  },
+  {
     path: '/invoice',
     icon: 'ti-file-invoice',
     label: 'Invoice',

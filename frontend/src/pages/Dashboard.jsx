@@ -10,6 +10,14 @@ const tools = [
     ready: true,
   },
   {
+    path: '/package',
+    icon: 'ti-package',
+    color: 'bg-indigo-50 text-indigo-700',
+    label: 'Package Generator',
+    desc: 'Scan paper sheets with AI or enter Umrah packages manually',
+    ready: true,
+  },
+  {
     icon: 'ti-file-invoice',
     color: 'bg-gray-50 text-gray-400',
     label: 'Invoice Generator',

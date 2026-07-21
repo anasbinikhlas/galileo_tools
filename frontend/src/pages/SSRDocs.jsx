@@ -153,7 +153,7 @@ function CopyButton({ text, label }) {
 function useSSRParser() {
   const [airline, setAirline] = useState('SV')
   const [paxList, setPaxList] = useState([
-    { surname: '', given: '', ppnum: '', nat: '', issuer: '', dob: '', exp: '', gender: 'M' }
+    { id: 'pax_' + Date.now(), paxNum: 1, surname: '', given: '', ppnum: '', nat: '', issuer: '', dob: '', exp: '', gender: 'M' }
   ])
   const [tokens, setTokens] = useState([])
 
@@ -229,17 +229,22 @@ function useSSRParser() {
   const resetPax = (index) => {
     setPaxList(prev => {
       const updated = [...prev]
-      updated[index] = { surname: '', given: '', ppnum: '', nat: '', issuer: '', dob: '', exp: '', gender: 'M' }
+      const currentPaxNum = updated[index].paxNum || (updated.length - index)
+      updated[index] = { id: updated[index].id || 'pax_' + Date.now(), paxNum: currentPaxNum, surname: '', given: '', ppnum: '', nat: '', issuer: '', dob: '', exp: '', gender: 'M' }
       return updated
     })
-    toast.success(`Cleared passenger #${index + 1} details`, { id: `clear-pax-${index}` })
+    toast.success(`Cleared passenger details`, { id: `clear-pax-${index}` })
   }
 
   const addPax = () => {
-    setPaxList(prev => [
-      ...prev,
-      { surname: '', given: '', ppnum: '', nat: '', issuer: '', dob: '', exp: '', gender: 'M' }
-    ])
+    setPaxList(prev => {
+      const maxPaxNum = prev.reduce((max, p) => Math.max(max, p.paxNum || 0), 0)
+      const nextPaxNum = maxPaxNum + 1
+      return [
+        { id: 'pax_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5), paxNum: nextPaxNum, surname: '', given: '', ppnum: '', nat: prev[0]?.nat || '', issuer: prev[0]?.issuer || '', dob: '', exp: '', gender: 'M' },
+        ...prev
+      ]
+    })
   }
 
   const removePax = (index) => {
@@ -247,19 +252,16 @@ function useSSRParser() {
     setPaxList(prev => prev.filter((_, idx) => idx !== index))
   }
 
-  const generateSSRLine = (pax, idx) => {
-    const { surname, given, ppnum, nat, issuer, dob, exp, gender } = pax
+  const generateSSRLine = (pax) => {
+    const { surname, given, ppnum, nat, issuer, dob, exp, gender, paxNum } = pax
     if (!surname || !given || !ppnum || !nat || !issuer || !dob || !exp || !gender) {
       return null
     }
-    const cleanGender = gender.replace('I', '')
-    // ALWAYS include the .P{idx+1} format even if there is only 1 passenger
-    const paxRef = `.P${idx + 1}`
-    // FIXED FORMAT: Removed the slash / between SSRDOCS and ${airline}HK1
+    const paxRef = `.P${paxNum || 1}`
     return `SI${paxRef}/SSRDOCS${airline}HK1/P/${nat}/${ppnum}/${issuer}/${dob}/${gender}/${exp}/${surname}/${given}`
   }
 
-  const ssrLines = paxList.map((pax, idx) => generateSSRLine(pax, idx))
+  const ssrLines = paxList.map((pax) => generateSSRLine(pax))
   const allLines = ssrLines.filter(line => line !== null)
   const allComplete = allLines.length === paxList.length
 
@@ -629,9 +631,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 antialiased font-sans">
+    <div className="flex flex-col flex-1 min-h-0 bg-gray-50 text-gray-900 antialiased font-sans">
       <Toaster position="top-right" />
-      <main className="flex-1 overflow-y-auto max-w-5xl w-full mx-auto p-5 space-y-4">
+      <main className="flex-1 overflow-y-auto max-w-5xl w-full mx-auto p-4 sm:p-5 pb-16 space-y-4">
         {/* Page content begins here */}
         {showKeyInput && (
           <div className="bg-gradient-to-r from-amber-50 to-amber-100/50 border border-amber-200 rounded-xl p-4 shadow-sm">
@@ -675,7 +677,7 @@ export default function App() {
         )}
 
         {/* ── Input method tabs ── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-input-search text-lg" aria-hidden="true" />
@@ -893,7 +895,7 @@ export default function App() {
         </div>
 
         {/* ── Passengers ── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-users text-lg" aria-hidden="true" />
@@ -911,7 +913,7 @@ export default function App() {
           <div className="space-y-4">
             {paxList.map((pax, idx) => (
               <PaxForm
-                key={idx}
+                key={pax.id || idx}
                 pax={pax}
                 index={idx}
                 total={paxList.length}
@@ -927,7 +929,7 @@ export default function App() {
         </div>
 
         {/* ── Output ── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-clipboard-text text-lg" aria-hidden="true" />
@@ -943,11 +945,11 @@ export default function App() {
           </div>
 
           <div className="space-y-2">
-            {ssrLines.map((line, idx) => (
+            {paxList.map((pax, idx) => (
               <OutputBox
-                key={idx}
-                line={line || `P${idx + 1} — Complete remaining fields above to populate output line.`}
-                passengerNum={paxList.length > 1 ? idx + 1 : null}
+                key={pax.id || idx}
+                line={ssrLines[idx] || `P${pax.paxNum || 1} — Complete remaining fields above to populate output line.`}
+                passengerNum={paxList.length > 1 ? (pax.paxNum || 1) : null}
               />
             ))}
           </div>
@@ -981,13 +983,13 @@ export default function App() {
 function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShortcut, onCameraShortcut, ssrLine }) {
   const complete = ssrLine !== null
   return (
-    <div className={`rounded-xl border p-4 transition-all shadow-sm ${
+    <div id={pax.id} className={`rounded-xl border p-4 transition-all shadow-sm ${
       complete ? 'border-emerald-200 bg-emerald-50/10' : 'border-gray-200 bg-white'
     }`}>
       <div className="flex flex-col gap-3 mb-3.5 pb-2 border-b border-gray-100 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded font-mono">
-            Passenger #{index + 1}
+            Passenger #{pax.paxNum || (total - index)}
           </span>
           {complete ? (
             <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1">
@@ -1001,10 +1003,10 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
         </div>
 
         {/* Action Controls */}
-        <div className="flex flex-col gap-2 text-xs font-semibold sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-row flex-wrap gap-1.5 text-xs font-semibold items-center">
           <button
             onClick={() => onCameraShortcut(index)}
-            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded w-full sm:w-auto justify-center"
+            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded"
             title="Open camera to capture passport"
           >
             <i className="ti ti-camera" />
@@ -1013,7 +1015,7 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
           
           <button
             onClick={() => onUploadShortcut(index)}
-            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded"
+            className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded"
             title="Upload a passport photo"
           >
             <i className="ti ti-upload" />
@@ -1022,7 +1024,7 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
           
           <button
             onClick={() => onReset(index)}
-            className="text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1 border border-gray-200 px-2.5 py-1 rounded hover:bg-gray-50"
+            className="text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1 border border-gray-200 px-2.5 py-1.5 rounded hover:bg-gray-50"
             title="Clear all text fields back to empty"
           >
             <i className="ti ti-rotate-ccw" />
@@ -1032,7 +1034,7 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
           {total > 1 && (
             <button
               onClick={() => onRemove(index)}
-              className="text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded"
+              className="text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded"
             >
               <i className="ti ti-trash" aria-hidden="true" />
               Delete
@@ -1041,14 +1043,14 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Field label="Surname"          value={pax.surname} onChange={(v) => onUpdate(index, 'surname', v)} />
         <Field label="Given name"       value={pax.given}   onChange={(v) => onUpdate(index, 'given', v)} />
         <Field label="Passport no."     value={pax.ppnum}   onChange={(v) => onUpdate(index, 'ppnum', v)} />
         <Field label="Nationality"      value={pax.nat}     onChange={(v) => onUpdate(index, 'nat', v)} maxLength={3} />
         <Field label="DOB (DDMMMYY)"    value={pax.dob}     onChange={(v) => onUpdate(index, 'dob', v)} />
         <Field label="Expiry (DDMMMYY)" value={pax.exp}     onChange={(v) => onUpdate(index, 'exp', v)} />
-        <GenderField value={pax.gender} onChange={(v) => onUpdate(index, 'gender', v)} />
+        <GenderField value={pax.gender} onChange={(v) => onUpdate(index, 'gender', v)} className="col-span-2 lg:col-span-1" />
       </div>
     </div>
   )
@@ -1073,9 +1075,9 @@ function Field({ label, value, onChange, maxLength }) {
   )
 }
 
-function GenderField({ value, onChange }) {
+function GenderField({ value, onChange, className }) {
   return (
-    <div className="space-y-1">
+    <div className={`space-y-1 ${className || ''}`}>
       <label className="block text-[11px] font-bold text-gray-500 tracking-wide uppercase">Gender</label>
       <select
         value={value}
