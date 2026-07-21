@@ -71,8 +71,8 @@ async function scanPackageWithGemini(base64Image, mimeType, userKey) {
     "sector": ""
   },
   "totals": {
-    "package_only": "1,050,000",
-    "package_with_ticket": "1,800,000"
+    "package_only": "",
+    "package_with_ticket": ""
   },
   "comments": ""
 }
@@ -1073,7 +1073,7 @@ export default function Package() {
                   type="text"
                   value={totals.package_only}
                   onChange={(e) => setTotals({ ...totals, package_only: e.target.value })}
-                  placeholder="TOTAL PACKAGE ONLY"
+                  placeholder="AMOUNT"
                   className="w-full text-center font-bold text-gray-900 focus:outline-none"
                 />
               </div>
@@ -1085,7 +1085,7 @@ export default function Package() {
                   type="text"
                   value={totals.package_with_ticket}
                   onChange={(e) => setTotals({ ...totals, package_with_ticket: e.target.value })}
-                  placeholder="TOTAL PACKAGE WITH TICKET"
+                  placeholder="AMOUNT"
                   className="w-full text-center font-extrabold text-indigo-700 focus:outline-none"
                 />
               </div>
@@ -1592,11 +1592,11 @@ function ColorPdfTemplate({ header = {}, pax = {}, totalPax = 0, depFlight = {},
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="bg-white border border-slate-200 rounded-xl p-3 text-center shadow-xs">
             <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL PACKAGE ONLY</span>
-            <span className="block text-base font-black text-slate-900">{totals?.package_only || '1,050,000'}</span>
+            <span className="block text-base font-black text-slate-900">{totals?.package_only || '-'}</span>
           </div>
           <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3 text-center shadow-xs">
             <span className="block text-[10px] font-extrabold text-blue-700 uppercase tracking-wider mb-1">TOTAL PACKAGE WITH TICKET</span>
-            <span className="block text-base font-black text-blue-700">{totals?.package_with_ticket || '1,800,000'}</span>
+            <span className="block text-base font-black text-blue-700">{totals?.package_with_ticket || '-'}</span>
           </div>
         </div>
       </div>
