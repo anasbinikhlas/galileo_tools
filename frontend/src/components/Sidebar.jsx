@@ -2,6 +2,12 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 const tools = [
   {
+    path: '/',
+    icon: 'ti-layout-dashboard',
+    label: 'Dashboard',
+    ready: true,
+  },
+  {
     path: '/ssr-docs',
     icon: 'ti-passport',
     label: 'SSR Docs',
@@ -11,6 +17,18 @@ const tools = [
     path: '/package',
     icon: 'ti-package',
     label: 'Package',
+    ready: true,
+  },
+  {
+    path: '/clients',
+    icon: 'ti-users',
+    label: 'Clients',
+    ready: true,
+  },
+  {
+    path: '/client-list',
+    icon: 'ti-list-details',
+    label: 'Client List',
     ready: true,
   },
   {
@@ -27,7 +45,7 @@ const tools = [
   },
   {
     path: '/customers',
-    icon: 'ti-users',
+    icon: 'ti-users-group',
     label: 'Customers',
     ready: false,
   },
