@@ -10,6 +10,10 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  input[type="text"] {
+    text-transform: uppercase;
+  }
+
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }

@@ -308,9 +308,9 @@ If you cannot read a field, leave it as empty string.`
 
   // Cascade list of models to try in case specific models are disabled/unsupported on user's project
   const modelsToTry = [
-    'gemini-2.5-flash',
     'gemini-1.5-flash',
-    'gemini-2.5-flash-preview-09-2025'
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash-8b'
   ]
 
   let lastError = null
