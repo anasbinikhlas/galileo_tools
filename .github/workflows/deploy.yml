@@ -31,22 +31,16 @@ jobs:
           echo "--- Local build output (frontend/dist) ---"
           ls -la dist
 
-      - name: 🔑 Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: 🔒 Trust known host
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
-
       - name: 📦 Deploy frontend dist to server
-        run: |
-          rsync -avz --delete \
-            -e "ssh -p 65002 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15" \
-            ./frontend/dist/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/
+        uses: easingthemes/ssh-deploy@v5.0.3
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-avz --delete"
+          SOURCE: "frontend/dist/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/home/u408469790/public_html/galileotools/frontend/dist/"
+          PORT: 65002
 
   deploy-backend:
     runs-on: ubuntu-latest
@@ -55,29 +49,16 @@ jobs:
       - name: 🚚 Get latest code
         uses: actions/checkout@v4
 
-      - name: 🔑 Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: 🔒 Trust known host
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
-
       - name: 📦 Deploy backend to server
-        run: |
-          rsync -avz --delete \
-            --exclude='.env' \
-            --exclude='storage/' \
-            --exclude='vendor/' \
-            --exclude='public/storage' \
-            --exclude='bootstrap/cache/' \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            -e "ssh -p 65002 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15" \
-            ./backend/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/backend/
+        uses: easingthemes/ssh-deploy@v5.0.3
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          ARGS: "-avz --delete --exclude='.env' --exclude='storage/' --exclude='vendor/' --exclude='public/storage' --exclude='bootstrap/cache/' --exclude='.git/' --exclude='.github/'"
+          SOURCE: "backend/"
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USER }}
+          TARGET: "/home/u408469790/public_html/galileotools/backend/"
+          PORT: 65002
 
       - name: 🐘 Laravel post-deploy
         uses: appleboy/ssh-action@v1.0.3
