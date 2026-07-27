@@ -6,30 +6,10 @@ on:
 
 concurrency:
   group: production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      backend: ${{ steps.filter.outputs.backend }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-              - '.github/workflows/deploy.yml'
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy.yml'
-
   deploy-frontend:
-    needs: changes
-    if: ${{ needs.changes.outputs.frontend == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -43,50 +23,64 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ./frontend/package-lock.json
 
-      - name: 📦 Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: ./frontend/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('./frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
       - name: 🛠️ Install and Build
         working-directory: ./frontend
         run: |
-          npm ci --prefer-offline
+          npm ci
           npm run build
+          echo "--- Local build output (frontend/dist) ---"
+          ls -la dist
+
+      - name: 🔑 Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🔒 Trust known host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
 
       - name: 📦 Deploy frontend dist to server
-        uses: easingthemes/ssh-deploy@v5.0.3
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avz --delete"
-          SOURCE: "frontend/dist/"
-          REMOTE_HOST: ${{ secrets.SSH_HOST }}
-          REMOTE_USER: ${{ secrets.SSH_USER }}
-          TARGET: "/home/u408469790/public_html/galileotools/frontend/dist/"
-          PORT: 65002
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p 65002" \
+            ./frontend/dist/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/
+          echo "--- Remote check (server dist folder) ---"
+          ssh -p 65002 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "ls -la /home/u408469790/public_html/galileotools/frontend/dist/"
 
   deploy-backend:
-    needs: changes
-    if: ${{ needs.changes.outputs.backend == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: 🚚 Get latest code
         uses: actions/checkout@v4
 
-      - name: 📦 Deploy backend to server
-        uses: easingthemes/ssh-deploy@v5.0.3
+      - name: 🔑 Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          ARGS: "-avz --delete --exclude='.env' --exclude='storage/' --exclude='vendor/' --exclude='public/storage' --exclude='bootstrap/cache/' --exclude='.git/' --exclude='.github/'"
-          SOURCE: "backend/"
-          REMOTE_HOST: ${{ secrets.SSH_HOST }}
-          REMOTE_USER: ${{ secrets.SSH_USER }}
-          TARGET: "/home/u408469790/public_html/galileotools/backend/"
-          PORT: 65002
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 🔒 Trust known host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: 📦 Deploy backend to server
+        run: |
+          rsync -avz --delete \
+            --exclude='.env' \
+            --exclude='storage/' \
+            --exclude='vendor/' \
+            --exclude='public/storage' \
+            --exclude='bootstrap/cache/' \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            -e "ssh -p 65002" \
+            ./backend/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/backend/
 
       - name: 🐘 Laravel post-deploy
         uses: appleboy/ssh-action@v1.0.3
