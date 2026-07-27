@@ -32,6 +32,12 @@ const tools = [
     ready: true,
   },
   {
+    path: '/contacts',
+    icon: 'ti-address-book',
+    label: 'Client Contacts',
+    ready: true,
+  },
+  {
     path: '/invoice',
     icon: 'ti-file-invoice',
     label: 'Invoice',
@@ -51,7 +57,7 @@ const tools = [
   },
 ]
 
-export default function Sidebar({ isOpen = false, onClose, collapsed = false, onToggleCollapse }) {
+export default function Sidebar({ isOpen = false, onClose, collapsed = false, onToggleCollapse, onLogout }) {
   return (
     <aside className={`fixed inset-y-0 left-0 z-40 w-64 ${collapsed ? 'md:w-16' : 'md:w-52'} transform bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-200 ease-in-out shadow-xl md:static md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
 
@@ -121,13 +127,23 @@ export default function Sidebar({ isOpen = false, onClose, collapsed = false, on
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-gray-100">
+      <div className="px-4 py-3 border-t border-gray-100 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-brand-50 flex items-center justify-center">
             <i className="ti ti-building text-brand-600" style={{ fontSize: 12 }} aria-hidden="true" />
           </div>
           <span className={`${collapsed ? 'inline md:hidden' : 'text-xs text-gray-500'}`}>Your Agency</span>
         </div>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="w-full mt-1 flex items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+          >
+            <i className="ti ti-logout" aria-hidden="true" />
+            <span className={`${collapsed ? 'inline md:hidden' : 'inline'}`}>Logout</span>
+          </button>
+        )}
       </div>
 
     </aside>

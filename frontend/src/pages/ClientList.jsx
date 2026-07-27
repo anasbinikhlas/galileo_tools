@@ -223,6 +223,7 @@ export default function ClientList() {
                     <th className="p-3">SR #</th>
                     <th className="p-3">CLIENT NAME</th>
                     <th className="p-3">DATE</th>
+                    <th className="p-3">DEP DATE</th>
                     <th className="p-3">PAX (ADT/CH/INF)</th>
                     <th className="p-3">DEP SECTOR</th>
                     <th className="p-3">PACKAGE TOTAL</th>
@@ -234,12 +235,14 @@ export default function ClientList() {
                   {filteredClients.map((client) => {
                     const isComplete = client.status === 'Complete' || client.status === 'Completed'
                     const displayStatus = isComplete ? 'Complete' : 'In Process'
+                    const depDateStr = client.depFlight?.date || client.departureDate || client.depDate || '—'
 
                     return (
                       <tr key={client.id} className="hover:bg-gray-50/80 transition-colors">
                         <td className="p-3 font-mono text-gray-500 font-bold">{client.sr_no || '01'}</td>
                         <td className="p-3 font-bold text-gray-900 uppercase">{client.name}</td>
                         <td className="p-3 text-gray-600">{client.date}</td>
+                        <td className="p-3 text-blue-700 font-semibold">{depDateStr}</td>
                         <td className="p-3 font-medium text-gray-700">
                           {client.pax?.adt || 0} ADT / {client.pax?.child || 0} CH / {client.pax?.infant || 0} INF
                         </td>

@@ -5,6 +5,7 @@ import SSRDocs from './pages/SSRDocs'
 import Package from './pages/Package'
 import Clients from './pages/Clients'
 import ClientList from './pages/ClientList'
+import ClientContacts from './pages/ClientContacts'
 import Login from './pages/Login'
 import RequireAuth from './components/RequireAuth'
 
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="package" element={<Package />} />
         <Route path="clients" element={<Clients />} />
         <Route path="client-list" element={<ClientList />} />
+        <Route path="contacts" element={<ClientContacts />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

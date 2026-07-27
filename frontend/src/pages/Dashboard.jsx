@@ -18,6 +18,22 @@ const tools = [
     ready: true,
   },
   {
+    path: '/client-list',
+    icon: 'ti-list-details',
+    color: 'bg-emerald-50 text-emerald-700',
+    label: 'Client List',
+    desc: 'View saved packages, departure dates, and export PDF vouchers',
+    ready: true,
+  },
+  {
+    path: '/contacts',
+    icon: 'ti-address-book',
+    color: 'bg-amber-50 text-amber-700',
+    label: 'Client Contacts',
+    desc: 'Directory of client phone, WhatsApp, and email addresses',
+    ready: true,
+  },
+  {
     icon: 'ti-file-invoice',
     color: 'bg-gray-50 text-gray-400',
     label: 'Invoice Generator',
@@ -29,13 +45,6 @@ const tools = [
     color: 'bg-gray-50 text-gray-400',
     label: 'Fare Calculator',
     desc: 'Base fare + taxes + markup = selling price',
-    ready: false,
-  },
-  {
-    icon: 'ti-users',
-    color: 'bg-gray-50 text-gray-400',
-    label: 'Customers',
-    desc: 'Save and search passenger passport records',
     ready: false,
   },
 ]

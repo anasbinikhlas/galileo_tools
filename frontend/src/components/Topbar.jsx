@@ -45,7 +45,7 @@ export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, s
           <button
             type="button"
             onClick={onLogout}
-            className="hidden md:inline-flex items-center gap-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-sm text-red-700 hover:bg-red-100"
+            className="inline-flex items-center gap-1.5 rounded border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
           >
             <i className="ti ti-logout" aria-hidden="true" />
             Logout

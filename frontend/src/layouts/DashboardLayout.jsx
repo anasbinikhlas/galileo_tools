@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
 import { logout } from '../auth'
+import { useInactivityLogout } from '../hooks/useInactivityLogout'
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
@@ -10,6 +11,14 @@ export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === '1' } catch (e) { return false }
   })
+
+  // 1-Hour Inactivity Auto Logout
+  useInactivityLogout()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   // Automatic behavior: show sidebar on large screens, hide on small
   useEffect(() => {
@@ -31,7 +40,13 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar isOpen={sidebarOpen} collapsed={collapsed} onClose={() => setSidebarOpen(false)} onToggleCollapse={() => setCollapsed(c => !c)} />
+      <Sidebar
+        isOpen={sidebarOpen}
+        collapsed={collapsed}
+        onClose={() => setSidebarOpen(false)}
+        onToggleCollapse={() => setCollapsed(c => !c)}
+        onLogout={handleLogout}
+      />
       {sidebarOpen && window.innerWidth < 768 && (
         <button
           type="button"
@@ -49,10 +64,7 @@ export default function DashboardLayout() {
           sidebarOpen={sidebarOpen}
           onToggleOpen={() => setSidebarOpen(s => !s)}
           onToggleMobileSidebar={() => setSidebarOpen(true)}
-          onLogout={() => {
-            logout()
-            navigate('/login', { replace: true })
-          }}
+          onLogout={handleLogout}
         />
 
         <Outlet />
