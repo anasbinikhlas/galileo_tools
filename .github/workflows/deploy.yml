@@ -43,16 +43,20 @@ jobs:
 
       - name: 📦 Deploy frontend dist to server
         run: |
-          rsync -avz --delete \
-            -e "ssh -p 65002" \
-            ./frontend/dist/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/
+          for i in {1..3}; do
+            echo "Deployment attempt $i..."
+            rsync -avz --delete \
+              -e "ssh -p 65002 -o ConnectTimeout=30 -o ServerAliveInterval=15" \
+              ./frontend/dist/ \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/ && break || (echo "SSH attempt $i failed, retrying in 10s..." && sleep 10)
+          done
           echo "--- Remote check (server dist folder) ---"
-          ssh -p 65002 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          ssh -p 65002 -o ConnectTimeout=30 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "ls -la /home/u408469790/public_html/galileotools/frontend/dist/"
 
   deploy-backend:
     runs-on: ubuntu-latest
+    needs: deploy-frontend
     timeout-minutes: 15
     steps:
       - name: 🚚 Get latest code
