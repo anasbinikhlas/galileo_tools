@@ -18,6 +18,7 @@ export default function ClientList() {
 
   const [filterStatus, setFilterStatus] = useState('All') // 'All' | 'In Process' | 'Complete'
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState('date_desc') // 'date_desc' | 'date_asc' | 'dep_asc' | 'dep_desc' | 'name_asc' | 'name_desc'
   const [showPrintModal, setShowPrintModal] = useState(false) // false | 'standard' | 'color'
   const [selectedClient, setSelectedClient] = useState(null)
 
@@ -41,9 +42,9 @@ export default function ClientList() {
   }
 
   const handleDeleteClient = (id, name) => {
-    if (window.confirm(`Are you sure you want to delete client record "${name}"?`)) {
+    if (window.confirm(`Are you sure you want to delete client record for "${name}"?`)) {
       setSavedClients(prev => prev.filter(c => c.id !== id))
-      toast.success(`Deleted client: ${name}`)
+      toast.success(`Client record deleted`, { id: `del-${id}` })
     }
   }
 
@@ -51,44 +52,52 @@ export default function ClientList() {
     navigate(`/clients?edit=${id}`)
   }
 
-  const handleOpenPrint = (client, type) => {
+  const handleOpenPrint = (client, mode) => {
     setSelectedClient(client)
-    setShowPrintModal(type) // 'standard' or 'color'
+    setShowPrintModal(mode)
   }
 
-  const handleSavePdf = async () => {
+  const handleDownloadPdf = async () => {
     const elementId = showPrintModal === 'color' ? 'printable-color-package' : 'printable-package'
-    const element = document.getElementById(elementId) || document.getElementById('printable-color-package')
+    const element = document.getElementById(elementId)
     if (!element) return
 
-    const clientName = selectedClient?.name || 'Client'
-    const fileName = `client-${clientName.toLowerCase().replace(/\s+/g, '-')}-package.pdf`
-
-    const options = {
-      margin: 5,
-      filename: fileName,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }
-
+    toast.loading('Generating client voucher PDF...', { id: 'pdf-gen' })
     try {
-      const worker = html2pdf().from(element).set(options)
-      const pdfBlob = await worker.output('blob')
-      const blob = new Blob([pdfBlob], { type: 'application/pdf' })
-      const blobUrl = URL.createObjectURL(blob)
+      const opt = {
+        margin: [5, 5, 5, 5],
+        filename: `Client_${selectedClient?.name || 'Voucher'}_${new Date().toISOString().slice(0, 10)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      }
 
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 3000)
+      await html2pdf().set(opt).from(element).save()
+      toast.success('Client voucher PDF downloaded!', { id: 'pdf-gen' })
     } catch (err) {
-      console.error('PDF generation error:', err)
+      console.error('PDF error:', err)
+      toast.error('Failed to generate PDF. Use Print button instead.', { id: 'pdf-gen' })
       window.print()
     }
+  }
+
+  // Date parser helper for accurate sorting
+  const getSortableDate = (dateStr) => {
+    if (!dateStr) return 0
+    const d = new Date(dateStr)
+    if (!isNaN(d.getTime())) return d.getTime()
+    
+    const m = String(dateStr).match(/^(\d{1,2})[-/\s.]*([A-Za-z]{3})[-/\s.]*(\d{2,4})?$/i)
+    if (m) {
+      const day = parseInt(m[1], 10)
+      const monthStr = m[2].toLowerCase()
+      const monthMap = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 }
+      const monthIdx = monthMap[monthStr] ?? 0
+      let year = m[3] ? parseInt(m[3], 10) : new Date().getFullYear()
+      if (year < 100) year = 2000 + year
+      return new Date(year, monthIdx, day).getTime()
+    }
+    return 0
   }
 
   const filteredClients = savedClients.filter(c => {
@@ -104,6 +113,35 @@ export default function ClientList() {
       (c.sr_no && c.sr_no.includes(searchTerm)) ||
       (c.depFlight?.sector && c.depFlight.sector.toLowerCase().includes(searchTerm.toLowerCase()))
     return matchesFilter && matchesSearch
+  })
+
+  // Apply Sorting (Departure Date, Client Name, or Client Add Date)
+  const sortedClients = [...filteredClients].sort((a, b) => {
+    if (sortBy === 'name_asc') {
+      return (a.name || '').localeCompare(b.name || '')
+    }
+    if (sortBy === 'name_desc') {
+      return (b.name || '').localeCompare(a.name || '')
+    }
+    if (sortBy === 'dep_asc') {
+      const depA = getSortableDate(a.depFlight?.date || a.departureDate || a.depDate)
+      const depB = getSortableDate(b.depFlight?.date || b.departureDate || b.depDate)
+      return depA - depB
+    }
+    if (sortBy === 'dep_desc') {
+      const depA = getSortableDate(a.depFlight?.date || a.departureDate || a.depDate)
+      const depB = getSortableDate(b.depFlight?.date || b.departureDate || b.depDate)
+      return depB - depA
+    }
+    if (sortBy === 'date_asc') {
+      const dateA = getSortableDate(a.updatedAt || a.createdAt || a.date)
+      const dateB = getSortableDate(b.updatedAt || b.createdAt || b.date)
+      return dateA - dateB
+    }
+    // Default: date_desc (Add Date: Newest First)
+    const dateA = getSortableDate(a.updatedAt || a.createdAt || a.date)
+    const dateB = getSortableDate(b.updatedAt || b.createdAt || b.date)
+    return dateB - dateA
   })
 
   // Calculate stats
@@ -184,26 +222,48 @@ export default function ClientList() {
         {/* Main Table Container */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-4">
           
-          {/* Status Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          {/* Status Tabs & Sort Selector */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-2">
             <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-              Client Records Directory ({filteredClients.length})
+              Client Records Directory ({sortedClients.length})
             </h3>
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-              {['All', 'In Process', 'Complete'].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`text-xs font-semibold px-3 py-1 rounded-md transition-all ${filterStatus === status ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Sort By Dropdown */}
+              <div className="flex items-center gap-1.5 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
+                <i className="ti ti-arrows-sort text-blue-600 text-xs" />
+                <span className="text-[11px] font-bold text-gray-600">Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-gray-800 focus:outline-none cursor-pointer"
                 >
-                  {status}
-                </button>
-              ))}
+                  <option value="date_desc">Add Date (Newest First)</option>
+                  <option value="date_asc">Add Date (Oldest First)</option>
+                  <option value="dep_asc">Departure Date (Earliest First)</option>
+                  <option value="dep_desc">Departure Date (Latest First)</option>
+                  <option value="name_asc">Client Name (A ➔ Z)</option>
+                  <option value="name_desc">Client Name (Z ➔ A)</option>
+                </select>
+              </div>
+
+              {/* Status Filter Tabs */}
+              <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg border border-gray-200">
+                {['All', 'In Process', 'Complete'].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`text-xs font-semibold px-3 py-1 rounded-md transition-all ${filterStatus === status ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Table */}
-          {filteredClients.length === 0 ? (
+          {sortedClients.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-xl space-y-2">
               <i className="ti ti-users text-4xl text-gray-300 block" />
               <p className="text-sm font-semibold text-gray-600">No client package records found</p>
@@ -232,7 +292,7 @@ export default function ClientList() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {filteredClients.map((client) => {
+                  {sortedClients.map((client) => {
                     const isComplete = client.status === 'Complete' || client.status === 'Completed'
                     const displayStatus = isComplete ? 'Complete' : 'In Process'
                     const depDateStr = client.depFlight?.date || client.departureDate || client.depDate || '—'
