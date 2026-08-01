@@ -994,11 +994,12 @@ export function InvoicePdfTemplate({
           </div>
 
           {/* Statement Footer Page 2 */}
-        <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium pt-2 border-t border-gray-200">
-          <span>Page 2 of 2</span>
+          <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium pt-2 border-t border-gray-200">
+            <span>Page 2 of 2</span>
+          </div>
         </div>
-      </div>
 
+      </div>
     </div>
   )
 }
