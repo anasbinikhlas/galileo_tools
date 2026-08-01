@@ -3452,6 +3452,8 @@ export default function Clients() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
       )}
 
       {/* ID 420: DOCUMENT GENERATOR PREVIEW MODAL */}
