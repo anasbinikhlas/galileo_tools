@@ -994,9 +994,400 @@ export function InvoicePdfTemplate({
           </div>
 
           {/* Statement Footer Page 2 */}
-          <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium pt-2 border-t border-gray-200">
-            <span>Page 2 of 2</span>
+        <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium pt-2 border-t border-gray-200">
+          <span>Page 2 of 2</span>
+        </div>
+      </div>
+
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎫 E-TICKET PASSENGER ITINERARY TEMPLATE (ID 420)
+// ─────────────────────────────────────────────────────────────────────────────
+export function ETicketPdfTemplate({
+  companyDetails = null,
+  header = {},
+  pax = {},
+  totalPax = 0,
+  flightItinerary = [],
+  passengerList = [],
+  pnr = '',
+  mode = 'grouped' // 'grouped' or 'separate'
+}) {
+  const company = companyDetails || getActiveCompanyDetails()
+  const safeHeaderName = String(header?.name || 'PASSENGER / CLIENT')
+  const safeHeaderDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safePnr = String(pnr || header?.sr_no || 'PNR-CONFIRMED').toUpperCase()
+
+  // Format flight list
+  const flights = Array.isArray(flightItinerary) && flightItinerary.length > 0
+    ? flightItinerary
+    : [
+        { type: 'DEPARTURE', airline: 'SV', flight_no: '701', sector: 'KHI - JED', date: '05 MAR 2026', dep_time: '09:20', arr_time: '11:15', class_type: 'Y', baggage: '30KG' },
+        { type: 'RETURN', airline: 'SV', flight_no: '702', sector: 'JED - KHI', date: '20 MAR 2026', dep_time: '14:30', arr_time: '20:10', class_type: 'Y', baggage: '30KG' }
+      ]
+
+  // Format passenger list
+  const rawPaxList = Array.isArray(passengerList) && passengerList.length > 0
+    ? passengerList
+    : [safeHeaderName]
+
+  const formattedPassengers = rawPaxList.map((p, idx) => {
+    if (typeof p === 'string') {
+      return { name: p, passport_no: 'A' + (1029384 + idx), ticket_no: '176-5580-274-' + (600 + idx), gender: 'M/F', type: 'ADT' }
+    }
+    return {
+      name: p.name || p.passengerName || safeHeaderName,
+      passport_no: p.passport_no || p.passportNo || 'P' + (100000 + idx),
+      ticket_no: p.ticket_no || p.ticketNo || '176-5580-274-' + (600 + idx),
+      gender: p.gender || 'ADT',
+      type: p.type || 'ADT'
+    }
+  })
+
+  const renderSingleTicket = (singlePax = null, ticketIndex = 0, isPageBreak = false) => {
+    const activePaxName = singlePax ? (singlePax.name || singlePax) : safeHeaderName
+    const activeTicketNo = singlePax?.ticket_no || ('176-5580-274-' + (600 + ticketIndex))
+
+    return (
+      <div 
+        key={`eticket-page-${ticketIndex}`}
+        className={`bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm uppercase ${isPageBreak ? 'print:pt-6' : ''}`}
+        style={isPageBreak ? { pageBreakBefore: 'always', breakBefore: 'page' } : {}}
+      >
+        {/* Company Header */}
+        {company && (
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-xl p-3.5 shadow-md border border-slate-700 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {company.logoUrl ? (
+                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xl">
+                  ✈️
+                </div>
+              )}
+              <div>
+                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+                  {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
+                </h1>
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
+              {company.phone && <div>📞 {company.phone}</div>}
+              {company.email && <div>✉️ {company.email}</div>}
+              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            </div>
           </div>
+        )}
+
+        {/* Title Banner */}
+        <div className="bg-indigo-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
+          <div>
+            <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
+              <span>✈️ ELECTRONIC TICKET PASSENGER ITINERARY</span>
+            </h2>
+            <p className="text-[10px] text-indigo-200">Official Flight Booking Confirmation</p>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+          </div>
+        </div>
+
+        {/* Booking Reference & Lead Guest Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono">
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 block">BOOKING REF / PNR</span>
+            <span className="font-black text-indigo-900 text-sm">{safePnr}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 block">PASSENGER NAME</span>
+            <span className="font-bold text-slate-900">{activePaxName}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 block">TICKET NUMBER</span>
+            <span className="font-bold text-slate-800">{activeTicketNo}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-400 block">ISSUE DATE</span>
+            <span className="font-bold text-slate-800">{safeHeaderDate}</span>
+          </div>
+        </div>
+
+        {/* Flight Itinerary Table */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-200 pb-1">
+            <span>FLIGHT SCHEDULE & ITINERARY</span>
+            <span className="text-[10px] font-normal text-slate-500">All times are local</span>
+          </div>
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-800 text-white font-bold text-[10px]">
+                <tr>
+                  <th className="p-2">AIRLINE / FLIGHT</th>
+                  <th className="p-2">SECTOR</th>
+                  <th className="p-2">DATE</th>
+                  <th className="p-2">DEP TIME</th>
+                  <th className="p-2">ARR TIME</th>
+                  <th className="p-2 text-center">CLASS</th>
+                  <th className="p-2 text-center">BAGGAGE</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
+                {flights.map((f, fIdx) => (
+                  <tr key={`f-row-${fIdx}`} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <td className="p-2 font-bold text-indigo-950">
+                      {f.airline || 'AIRLINE'} {f.flight_no || f.flightNo || ''}
+                    </td>
+                    <td className="p-2 font-black text-slate-900">{f.sector || 'KHI - JED'}</td>
+                    <td className="p-2 text-slate-800">{f.date || '05 MAR'}</td>
+                    <td className="p-2 font-bold text-emerald-800">{f.dep_time || f.depTime || '--:--'}</td>
+                    <td className="p-2 font-bold text-slate-700">{f.arr_time || f.arrTime || '--:--'}</td>
+                    <td className="p-2 text-center font-bold">{f.class_type || f.classType || 'Y'}</td>
+                    <td className="p-2 text-center font-bold text-slate-600">{f.baggage || '30KG'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Passenger List Table (If grouped mode) */}
+        {mode === 'grouped' && (
+          <div className="space-y-1.5 pt-2">
+            <div className="text-xs font-bold text-slate-800 border-b border-slate-200 pb-1">
+              PASSENGER DETAILS ({formattedPassengers.length})
+            </div>
+            <div className="border border-slate-200 rounded-lg overflow-hidden">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-indigo-50 text-indigo-950 font-bold text-[10px]">
+                  <tr>
+                    <th className="p-2 w-8 text-center">#</th>
+                    <th className="p-2">PASSENGER NAME</th>
+                    <th className="p-2">PASSPORT NO</th>
+                    <th className="p-2">TICKET NO</th>
+                    <th className="p-2 text-center">TYPE</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
+                  {formattedPassengers.map((p, pIdx) => (
+                    <tr key={`p-pax-${pIdx}`} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                      <td className="p-2 text-center text-slate-400 font-bold">{pIdx + 1}</td>
+                      <td className="p-2 font-black text-slate-900">{p.name}</td>
+                      <td className="p-2 font-bold text-slate-700">{p.passport_no}</td>
+                      <td className="p-2 font-bold text-indigo-900">{p.ticket_no}</td>
+                      <td className="p-2 text-center font-bold text-emerald-800">{p.type}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Important Terms & Conditions */}
+        <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
+          <p className="font-bold text-amber-950 uppercase flex items-center gap-1">
+            <span>⚠️ IMPORTANT TRAVEL NOTICE & AIRPORT RULES:</span>
+          </p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li>Please report at the airport check-in counter at least 3-4 hours prior to scheduled flight departure.</li>
+            <li>Passport must be valid for at least 6 months from the date of travel with valid visas attached.</li>
+            <li>Baggage allowance strictly according to airline policy. Hand baggage must not exceed 7KG.</li>
+          </ul>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'separate' && formattedPassengers.length > 1) {
+    return (
+      <div className="w-full max-w-4xl mx-auto space-y-6">
+        {formattedPassengers.map((p, i) => renderSingleTicket(p, i, i > 0))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full max-w-4xl mx-auto">
+      {renderSingleTicket(null, 0, false)}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🏨 HOTEL ACCOMMODATION VOUCHER TEMPLATE (ID 420)
+// ─────────────────────────────────────────────────────────────────────────────
+export function HotelVoucherPdfTemplate({
+  companyDetails = null,
+  header = {},
+  leadGuestName = '',
+  paxSummary = {},
+  makkahHotels = [],
+  madinaHotels = [],
+  hcnMakkah = '',
+  hcnMadina = '',
+  comments = ''
+}) {
+  const company = companyDetails || getActiveCompanyDetails()
+  const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
+  const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
+
+  const mList = Array.isArray(makkahHotels) && makkahHotels.length > 0
+    ? makkahHotels
+    : [{ hotel_name: 'Makkah Hotel', check_in: '10-MAR-2026', check_out: '15-MAR-2026', nights: 5, room_type: 'Double Room', room_qty: 1 }]
+
+  const madList = Array.isArray(madinaHotels) && madinaHotels.length > 0
+    ? madinaHotels
+    : [{ hotel_name: 'Madina Hotel', check_in: '15-MAR-2026', check_out: '20-MAR-2026', nights: 5, room_type: 'Double Room', room_qty: 1 }]
+
+  return (
+    <div className="w-full max-w-4xl mx-auto p-1 sm:p-2">
+      <div id="printable-hotel-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm text-left uppercase">
+        
+        {/* Company Header */}
+        {company && (
+          <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white rounded-xl p-3.5 shadow-md border border-emerald-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {company.logoUrl ? (
+                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-xl">
+                  🏨
+                </div>
+              )}
+              <div>
+                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+                  {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
+                </h1>
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
+              {company.phone && <div>📞 {company.phone}</div>}
+              {company.email && <div>✉️ {company.email}</div>}
+              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Title Banner */}
+        <div className="bg-emerald-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
+          <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
+            <span>🏨 OFFICIAL HOTEL ACCOMMODATION VOUCHER</span>
+          </h2>
+          <span className="text-[10px] font-bold bg-white text-emerald-900 px-2.5 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+        </div>
+
+        {/* Lead Guest & Voucher Details Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-emerald-50/50 p-3 rounded-lg border border-emerald-200 text-xs font-mono">
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">LEAD GUEST NAME</span>
+            <span className="font-black text-emerald-950 text-sm">{safeClient}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
+            <span className="font-bold text-slate-900">HV-{Date.now().toString().slice(-6)}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">TOTAL PAX</span>
+            <span className="font-bold text-slate-800">
+              {paxSummary.adt || 1} ADT {paxSummary.child ? `/ ${paxSummary.child} CHD` : ''}
+            </span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">ISSUE DATE</span>
+            <span className="font-bold text-slate-800">{safeDate}</span>
+          </div>
+        </div>
+
+        {/* Makkah Hotels Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-black text-emerald-900 border-b border-emerald-200 pb-1">
+            <span>🕋 MAKKAH AL MUKARRAMAH ACCOMMODATION</span>
+            {hcnMakkah && <span className="text-xs bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold">HCN #: {hcnMakkah}</span>}
+          </div>
+          <div className="border border-emerald-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-emerald-800 text-white font-bold text-[10px]">
+                <tr>
+                  <th className="p-2">HOTEL NAME</th>
+                  <th className="p-2">CHECK IN</th>
+                  <th className="p-2">CHECK OUT</th>
+                  <th className="p-2 text-center">NIGHTS</th>
+                  <th className="p-2">ROOM TYPE & QTY</th>
+                  <th className="p-2 font-mono">HCN / RESERVATION NO</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100 font-mono text-[11px]">
+                {mList.map((h, i) => (
+                  <tr key={`m-h-${i}`} className="bg-white">
+                    <td className="p-2.5 font-black text-emerald-950">{h.hotel_name || h.hotelName || 'MAKKAH HOTEL'}</td>
+                    <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
+                    <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
+                    <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
+                    <td className="p-2.5 font-bold text-slate-700">{h.room_qty || 1} x {h.room_type || 'STANDARD'}</td>
+                    <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMakkah || 'CONFIRMED'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Madina Hotels Section */}
+        <div className="space-y-2 pt-2">
+          <div className="flex items-center justify-between text-xs font-black text-emerald-900 border-b border-emerald-200 pb-1">
+            <span>🕌 MADINA AL MUNAWWARAH ACCOMMODATION</span>
+            {hcnMadina && <span className="text-xs bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold">HCN #: {hcnMadina}</span>}
+          </div>
+          <div className="border border-emerald-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-emerald-800 text-white font-bold text-[10px]">
+                <tr>
+                  <th className="p-2">HOTEL NAME</th>
+                  <th className="p-2">CHECK IN</th>
+                  <th className="p-2">CHECK OUT</th>
+                  <th className="p-2 text-center">NIGHTS</th>
+                  <th className="p-2">ROOM TYPE & QTY</th>
+                  <th className="p-2 font-mono">HCN / RESERVATION NO</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100 font-mono text-[11px]">
+                {madList.map((h, i) => (
+                  <tr key={`mad-h-${i}`} className="bg-white">
+                    <td className="p-2.5 font-black text-emerald-950">{h.hotel_name || h.hotelName || 'MADINA HOTEL'}</td>
+                    <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
+                    <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
+                    <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
+                    <td className="p-2.5 font-bold text-slate-700">{h.room_qty || 1} x {h.room_type || 'STANDARD'}</td>
+                    <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMadina || 'CONFIRMED'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Comments / Meal Inclusions */}
+        {comments && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+            <span className="font-bold text-slate-700">SPECIAL INSTRUCTIONS / MEAL PLAN:</span> {comments}
+          </div>
+        )}
+
+        {/* Hotel Terms */}
+        <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
+          <p className="font-bold text-emerald-950">📌 HOTEL CHECK-IN POLICIES & TERMS:</p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li>Standard Hotel Check-In time is 16:00 (4:00 PM) and Check-Out time is 12:00 (12:00 PM).</li>
+            <li>Original Passport / Saudi National ID must be presented at the hotel reception desk upon arrival.</li>
+            <li>Hotel Reservation Numbers (HCN) are non-transferable and guaranteed by the issuing travel provider.</li>
+          </ul>
         </div>
 
       </div>
@@ -1004,4 +1395,207 @@ export function InvoicePdfTemplate({
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🚌 TRANSPORTATION VOUCHER TEMPLATE (ID 420)
+// ─────────────────────────────────────────────────────────────────────────────
+export function TransportVoucherPdfTemplate({
+  companyDetails = null,
+  header = {},
+  leadGuestName = '',
+  paxSummary = {},
+  transportRows = [],
+  driverContact = '',
+  comments = ''
+}) {
+  const company = companyDetails || getActiveCompanyDetails()
+  const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
+  const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
 
+  const tList = Array.isArray(transportRows) && transportRows.length > 0
+    ? transportRows
+    : [{ type: 'PRIVATE GMC YUKON', qty: 1, sector: 'JED AIRPORT -> MAKKAH HOTEL -> MADINA HOTEL -> JED AIRPORT', date: safeDate, driver: driverContact || 'COORDINATOR ON ARRIVAL' }]
+
+  return (
+    <div className="w-full max-w-4xl mx-auto p-1 sm:p-2">
+      <div id="printable-transport-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm text-left uppercase">
+        
+        {/* Company Header */}
+        {company && (
+          <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white rounded-xl p-3.5 shadow-md border border-blue-800 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              {company.logoUrl ? (
+                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xl">
+                  🚌
+                </div>
+              )}
+              <div>
+                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+                  {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
+                </h1>
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+              </div>
+            </div>
+            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
+              {company.phone && <div>📞 {company.phone}</div>}
+              {company.email && <div>✉️ {company.email}</div>}
+              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* Title Banner */}
+        <div className="bg-blue-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
+          <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
+            <span>🚌 OFFICIAL TRANSPORTATION SERVICES VOUCHER</span>
+          </h2>
+          <span className="text-[10px] font-bold bg-white text-blue-900 px-2.5 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+        </div>
+
+        {/* Lead Guest & Voucher Details Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 text-xs font-mono">
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">LEAD PASSENGER</span>
+            <span className="font-black text-blue-950 text-sm">{safeClient}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
+            <span className="font-bold text-slate-900">TV-{Date.now().toString().slice(-6)}</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">PASSENGER COUNT</span>
+            <span className="font-bold text-slate-800">{paxSummary.adt || 1} ADT</span>
+          </div>
+          <div>
+            <span className="text-[9px] font-bold text-slate-500 block">ISSUE DATE</span>
+            <span className="font-bold text-slate-800">{safeDate}</span>
+          </div>
+        </div>
+
+        {/* Transport Schedule Table */}
+        <div className="space-y-2">
+          <div className="text-xs font-black text-blue-900 border-b border-blue-200 pb-1">
+            TRANSPORTATION SECTORS & VEHICLE DETAILS
+          </div>
+          <div className="border border-blue-200 rounded-lg overflow-hidden">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-blue-900 text-white font-bold text-[10px]">
+                <tr>
+                  <th className="p-2.5">VEHICLE TYPE</th>
+                  <th className="p-2.5">SECTOR / ROUTE</th>
+                  <th className="p-2.5 text-center">QTY</th>
+                  <th className="p-2.5">DRIVER / COORDINATOR CONTACT</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-blue-100 font-mono text-[11px]">
+                {tList.map((t, i) => (
+                  <tr key={`t-row-${i}`} className="bg-white">
+                    <td className="p-3 font-black text-blue-950">{t.type || 'PRIVATE VEHICLE'}</td>
+                    <td className="p-3 font-bold text-slate-900">{t.sector || 'JED AIRPORT -> MAKKAH HOTEL'}</td>
+                    <td className="p-3 text-center font-bold text-blue-800">{t.qty || 1}</td>
+                    <td className="p-3 font-bold text-emerald-800">{t.driver || driverContact || 'ON ARRIVAL CALL'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Driver Contact & Special Instructions */}
+        {comments && (
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+            <span className="font-bold text-slate-700">REMARKS & PICKUP NOTES:</span> {comments}
+          </div>
+        )}
+
+        {/* Transport Guidelines */}
+        <div className="bg-blue-50/60 border border-blue-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
+          <p className="font-bold text-blue-950">📍 ARRIVAL & PICKUP INSTRUCTIONS:</p>
+          <ul className="list-disc pl-4 space-y-0.5">
+            <li>For Airport Pickups: Transport coordinator will hold a name board at the exit arrival terminal.</li>
+            <li>Please inform driver / transport coordinator immediately if your flight is delayed.</li>
+            <li>Luggage capacity is subject to the vehicle specification booked. Extra baggage may require an additional vehicle.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✨ ALL-IN-ONE CONSOLIDATED VOUCHER SUITE TEMPLATE (ID 420)
+// ─────────────────────────────────────────────────────────────────────────────
+export function AllInOnePdfTemplate({
+  companyDetails = null,
+  header = {},
+  pax = {},
+  totalPax = 0,
+  flightItinerary = [],
+  passengerList = [],
+  makkahHotels = [],
+  madinaHotels = [],
+  transportRows = [],
+  hcnMakkah = '',
+  hcnMadina = '',
+  driverContact = '',
+  comments = ''
+}) {
+  return (
+    <div id="printable-all-in-one" className="w-full max-w-4xl mx-auto space-y-6">
+      
+      {/* PAGE 1: E-TICKET ITINERARY */}
+      <div>
+        <div className="text-center font-bold text-xs text-indigo-900 bg-indigo-50 py-1 rounded-t-lg border border-indigo-200 uppercase tracking-widest">
+          SECTION 1 OF 3 — E-TICKET & FLIGHT ITINERARY
+        </div>
+        <ETicketPdfTemplate 
+          companyDetails={companyDetails}
+          header={header}
+          pax={pax}
+          totalPax={totalPax}
+          flightItinerary={flightItinerary}
+          passengerList={passengerList}
+          mode="grouped"
+        />
+      </div>
+
+      {/* PAGE 2: HOTEL VOUCHER */}
+      <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }} className="pt-4">
+        <div className="text-center font-bold text-xs text-emerald-900 bg-emerald-50 py-1 rounded-t-lg border border-emerald-200 uppercase tracking-widest">
+          SECTION 2 OF 3 — HOTEL ACCOMMODATION VOUCHER
+        </div>
+        <HotelVoucherPdfTemplate 
+          companyDetails={companyDetails}
+          header={header}
+          leadGuestName={header?.name}
+          paxSummary={pax}
+          makkahHotels={makkahHotels}
+          madinaHotels={madinaHotels}
+          hcnMakkah={hcnMakkah}
+          hcnMadina={hcnMadina}
+          comments={comments}
+        />
+      </div>
+
+      {/* PAGE 3: TRANSPORTATION VOUCHER */}
+      <div style={{ pageBreakBefore: 'always', breakBefore: 'page' }} className="pt-4">
+        <div className="text-center font-bold text-xs text-blue-900 bg-blue-50 py-1 rounded-t-lg border border-blue-200 uppercase tracking-widest">
+          SECTION 3 OF 3 — TRANSPORTATION SERVICES VOUCHER
+        </div>
+        <TransportVoucherPdfTemplate 
+          companyDetails={companyDetails}
+          header={header}
+          leadGuestName={header?.name}
+          paxSummary={pax}
+          transportRows={transportRows}
+          driverContact={driverContact}
+          comments={comments}
+        />
+      </div>
+
+    </div>
+  )
+}

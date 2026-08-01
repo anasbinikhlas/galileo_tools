@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
-import { ColorPdfTemplate, StandardPdfTemplate, InvoicePdfTemplate } from '../components/VoucherTemplates'
+import { ColorPdfTemplate, StandardPdfTemplate, InvoicePdfTemplate, ETicketPdfTemplate, HotelVoucherPdfTemplate, TransportVoucherPdfTemplate, AllInOnePdfTemplate } from '../components/VoucherTemplates'
 
 // API Key configuration fallback
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
@@ -510,6 +510,37 @@ export default function Clients() {
   const [showTerminalModal, setShowTerminalModal] = useState(false)
   const [terminalInputText, setTerminalInputText] = useState('')
   const [passengerList, setPassengerList] = useState([])
+
+  // ID 420: Standalone & Combined Document Voucher Generator Modal States
+  const [showDocModal, setShowDocModal] = useState(null) // null | 'eticket' | 'hotel' | 'transport' | 'allinone'
+  const [hcnMakkah, setHcnMakkah] = useState('')
+  const [hcnMadina, setHcnMadina] = useState('')
+  const [driverContact, setDriverContact] = useState('')
+  const [ticketMode, setTicketMode] = useState('grouped') // 'grouped' or 'separate'
+  const [customPnr, setCustomPnr] = useState('')
+
+  // PDF Download Helper
+  const downloadPdf = (elementId, filename) => {
+    const element = document.getElementById(elementId)
+    if (!element) {
+      toast.error('Element for PDF export not found.')
+      return
+    }
+    toast.loading('Generating PDF document...', { id: 'pdf-gen' })
+    const opt = {
+      margin: [4, 4, 4, 4],
+      filename: filename || 'Document.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }
+    html2pdf().set(opt).from(element).save().then(() => {
+      toast.success('PDF document downloaded successfully!', { id: 'pdf-gen' })
+    }).catch(err => {
+      console.error('PDF error:', err)
+      toast.error('Failed to generate PDF document.', { id: 'pdf-gen' })
+    })
+  }
 
   const handleParseTerminalText = () => {
     if (!terminalInputText || !terminalInputText.trim()) {
@@ -2758,6 +2789,53 @@ export default function Clients() {
             ></textarea>
           </div>
 
+          {/* ID 420: GENERATE VOUCHERS ACTION BAR BELOW CLIENT PACKAGE */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 rounded-xl border border-indigo-900/50 shadow-md space-y-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-white gap-1">
+              <span className="text-xs font-black uppercase tracking-wider flex items-center gap-2 text-indigo-300">
+                <i className="ti ti-file-text text-base text-emerald-400" />
+                Voucher Generator Suite (ID 420)
+              </span>
+              <span className="text-[10px] font-bold text-slate-400">
+                Generate 1-Click E-Tickets, Hotel Vouchers, Transport Vouchers & Combined Packages
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowDocModal('eticket')}
+                className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all border border-indigo-400/30 active:scale-95 cursor-pointer"
+              >
+                <span>✈️ Generate E-Ticket</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDocModal('hotel')}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all border border-emerald-400/30 active:scale-95 cursor-pointer"
+              >
+                <span>🏨 Generate Hotel Voucher</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDocModal('transport')}
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-all border border-blue-400/30 active:scale-95 cursor-pointer"
+              >
+                <span>🚌 Generate Transport Voucher</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowDocModal('allinone')}
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 shadow-md transition-all border border-purple-400/40 active:scale-95 cursor-pointer"
+              >
+                <span>✨ Generate All-in-One</span>
+              </button>
+            </div>
+          </div>
+
           {/* BOTTOM SAVE BUTTON */}
           <div className="flex justify-end gap-3 border-t border-gray-100 pt-3">
             <button
@@ -3374,6 +3452,188 @@ export default function Clients() {
                 </button>
               </div>
             </div>
+      )}
+
+      {/* ID 420: DOCUMENT GENERATOR PREVIEW MODAL */}
+      {showDocModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 overflow-y-auto p-2 sm:p-6 flex justify-center items-start backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDocModal(null)
+          }}
+        >
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-4 sm:p-6 space-y-4 shadow-2xl my-3 sm:my-6 relative border border-slate-200 text-slate-900 animate-in fade-in zoom-in duration-150">
+            
+            {/* Modal Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3.5 gap-2">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2 uppercase tracking-wide">
+                  <span className="text-xl">
+                    {showDocModal === 'eticket' && '✈️'}
+                    {showDocModal === 'hotel' && '🏨'}
+                    {showDocModal === 'transport' && '🚌'}
+                    {showDocModal === 'allinone' && '✨'}
+                  </span>
+                  {showDocModal === 'eticket' && 'E-Ticket Passenger Itinerary Generator'}
+                  {showDocModal === 'hotel' && 'Hotel Accommodation Voucher Generator'}
+                  {showDocModal === 'transport' && 'Transportation Services Voucher Generator'}
+                  {showDocModal === 'allinone' && 'All-in-One Consolidated Voucher Generator'}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">Billed to: <span className="font-bold text-indigo-900">{header.name || 'Client'}</span></p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const elemId = showDocModal === 'eticket' ? 'eticket-page-0' 
+                                 : showDocModal === 'hotel' ? 'printable-hotel-voucher'
+                                 : showDocModal === 'transport' ? 'printable-transport-voucher'
+                                 : 'printable-all-in-one'
+                    const fname = `${showDocModal.toUpperCase()}_${(header.name || 'Client').replace(/\s+/g, '_')}.pdf`
+                    downloadPdf(elemId, fname)
+                  }}
+                  className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                >
+                  <i className="ti ti-download text-sm" /> Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                >
+                  <i className="ti ti-printer text-sm" /> Print
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDocModal(null)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                >
+                  &times; Close
+                </button>
+              </div>
+            </div>
+
+            {/* Controls Bar for missing info / toggles */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              {(showDocModal === 'eticket' || showDocModal === 'allinone') && (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">TICKET LAYOUT MODE</label>
+                    <select
+                      value={ticketMode}
+                      onChange={(e) => setTicketMode(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold bg-white text-slate-800"
+                    >
+                      <option value="grouped">Grouped Itinerary (All Pax in 1 Ticket)</option>
+                      <option value="separate">Separate Ticket Per Passenger</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">PNR / BOOKING REF</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. PNR-8941A"
+                      value={customPnr}
+                      onChange={(e) => setCustomPnr(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono bg-white uppercase text-slate-900"
+                    />
+                  </div>
+                </>
+              )}
+
+              {(showDocModal === 'hotel' || showDocModal === 'allinone') && (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">MAKKAH HOTEL HCN #</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. HCN-90214"
+                      value={hcnMakkah}
+                      onChange={(e) => setHcnMakkah(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono bg-white uppercase text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">MADINA HOTEL HCN #</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. HCN-44120"
+                      value={hcnMadina}
+                      onChange={(e) => setHcnMadina(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono bg-white uppercase text-slate-900"
+                    />
+                  </div>
+                </>
+              )}
+
+              {(showDocModal === 'transport' || showDocModal === 'allinone') && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DRIVER / TRANSPORT CONTACT</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Driver: +966 50 123 4567"
+                    value={driverContact}
+                    onChange={(e) => setDriverContact(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold bg-white text-slate-900"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Document Preview Box */}
+            <div className="overflow-x-auto max-w-full pb-2">
+              {showDocModal === 'eticket' && (
+                <ETicketPdfTemplate 
+                  header={header}
+                  pax={pax}
+                  totalPax={totalPax}
+                  flightItinerary={flightItinerary}
+                  passengerList={passengerList}
+                  pnr={customPnr}
+                  mode={ticketMode}
+                />
+              )}
+              {showDocModal === 'hotel' && (
+                <HotelVoucherPdfTemplate 
+                  header={header}
+                  leadGuestName={header.name}
+                  paxSummary={pax}
+                  makkahHotels={makkahHotels}
+                  madinaHotels={madinaHotels}
+                  hcnMakkah={hcnMakkah}
+                  hcnMadina={hcnMadina}
+                  comments={comments}
+                />
+              )}
+              {showDocModal === 'transport' && (
+                <TransportVoucherPdfTemplate 
+                  header={header}
+                  leadGuestName={header.name}
+                  paxSummary={pax}
+                  transportRows={transportRows}
+                  driverContact={driverContact}
+                  comments={comments}
+                />
+              )}
+              {showDocModal === 'allinone' && (
+                <AllInOnePdfTemplate 
+                  header={header}
+                  pax={pax}
+                  totalPax={totalPax}
+                  flightItinerary={flightItinerary}
+                  passengerList={passengerList}
+                  makkahHotels={makkahHotels}
+                  madinaHotels={madinaHotels}
+                  transportRows={transportRows}
+                  hcnMakkah={hcnMakkah}
+                  hcnMadina={hcnMadina}
+                  driverContact={driverContact}
+                  comments={comments}
+                />
+              )}
+            </div>
+
           </div>
         </div>
       )}
