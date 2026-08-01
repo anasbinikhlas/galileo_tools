@@ -13,7 +13,7 @@ export default function Topbar({ title, subtitle, collapsed, onToggleCollapse, s
             <span className="sr-only">Open sidebar</span>
           </button>
         )}
-        <span className="text-sm font-semibold text-gray-900">{title || 'GalileoTools'}</span>
+        <span className="text-sm font-semibold text-gray-900">{title || 'Travel Agents Suite'}</span>
         {subtitle && (
           <span className="text-xs text-gray-400 hidden sm:inline">{subtitle}</span>
         )}

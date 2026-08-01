@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
-import { ColorPdfTemplate, StandardPdfTemplate } from '../components/VoucherTemplates'
+import { ColorPdfTemplate, StandardPdfTemplate, InvoicePdfTemplate } from '../components/VoucherTemplates'
 
 // API Key configuration fallback
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
@@ -160,6 +160,7 @@ async function scanTicketWithGemini(base64Image, mimeType, userKey) {
 
 {
   "name": "",
+  "passengers": ["FULL PASSENGER NAME 1", "FULL PASSENGER NAME 2"],
   "date": "",
   "adt": 1,
   "adt_price": 0,
@@ -191,7 +192,8 @@ async function scanTicketWithGemini(base64Image, mimeType, userKey) {
 }
 
 Rules:
-- "name": Extract the first or primary passenger full name available in the reservation/ticket (e.g. "ANAS", "MOHAMMAD ALAM", "JOHN DOE").
+- "passengers": Extract ALL passenger full names present in the ticket reservation (e.g. ["MEHNAZ SHAMEEM", "SALAAR HUSSAIN", "SULEMAN HUSSAIN", "BISMA ADNAN HUSSAIN"]).
+- "name": Set to the FIRST passenger full name available in the ticket reservation.
 - "date": Extract the booking or travel issue date. If not found, use departure date.
 - "adt", "child", "infant": Count ADT (Adults), CHILD (Children), and INFANT (Infants). Extract individual passenger ticket prices/fares if present.
 - "flights": Extract EVERY flight leg/segment present in the ticket (can be 1, 2, 3, 4, 5, 6, 7 or more lines).
@@ -295,26 +297,44 @@ function parseGalileoTerminalText(rawText) {
   const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
   
   let name = ''
+  const passengers = []
   const flights = []
 
-  // Name patterns: 1.1IKHLAS/ANAS BIN MR or 1.IKHLAS/ANAS MR
-  const nameRegex = /^\d+(?:\.\d+)?\s*([A-Z]+)\/([A-Z\s]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF))?$/i
-
-  // Flight line patterns:
-  // 1. SV 701 Y 20AUG KHIJED HS1 0920 1115 0 E TH
-  // 2. SV 1054 M 30AUG JEDRUH HS1 2355 #0140 0 E SU 1
-  const flightRegex = /^(?:\d+\.\s*)?([A-Z0-9]{2})\s*(\d{1,4})\s*([A-Z])?\s*(\d{1,2}[A-Z]{3})\s*([A-Z]{6})\s*(?:[A-Z0-9]{3})?\s*(\d{4})\s*(#?\d{4})/i
+  // Passenger regex matching any occurrence of number.number SURNAME/GIVEN TITLE
+  // Example: 1.1SHAMEEM/MEHNAZ MRS, 2.1HUSSAIN/SALAAR MR, 3.1HUSSAIN/SULEMAN MR, 4.1HUSSAIN/BISMA ADNAN MRS
+  const paxRegex = /\b\d+(?:\.\d+)?\s*([A-Z]+)\/([A-Z\s]+?)(?=\s+(?:MR|MRS|MS|MISS|MSTR|INF|\d+\.|$))/gi
 
   for (const line of lines) {
-    const nameMatch = line.match(nameRegex)
-    if (nameMatch && !name) {
-      const surname = nameMatch[1].toUpperCase()
-      const given = nameMatch[2].trim().toUpperCase()
-      name = `${given} / ${surname}`
-      continue
+    // 1. Scan line for passenger tokens (multi-passenger line support)
+    let paxMatch
+    const linePaxRegex = new RegExp(paxRegex)
+    while ((paxMatch = linePaxRegex.exec(line)) !== null) {
+      const surname = paxMatch[1].toUpperCase()
+      let given = paxMatch[2].trim().toUpperCase()
+      // Remove trailing title MR/MRS/etc if attached
+      given = given.replace(/\s+(MR|MRS|MS|MISS|MSTR|INF)$/i, '').trim()
+      const formattedName = `${given} ${surname}`.trim()
+      if (formattedName && !passengers.includes(formattedName)) {
+        passengers.push(formattedName)
+      }
     }
 
-    const flightMatch = line.match(flightRegex)
+    // Fallback single line passenger match
+    if (passengers.length === 0) {
+      const singlePaxMatch = line.match(/^\d+(?:\.\d+)?\s*([A-Z]+)\/([A-Z\s]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF))?$/i)
+      if (singlePaxMatch) {
+        const surname = singlePaxMatch[1].toUpperCase()
+        let given = singlePaxMatch[2].trim().toUpperCase()
+        given = given.replace(/\s+(MR|MRS|MS|MISS|MSTR|INF)$/i, '').trim()
+        const formattedName = `${given} ${surname}`.trim()
+        if (formattedName && !passengers.includes(formattedName)) {
+          passengers.push(formattedName)
+        }
+      }
+    }
+
+    // 2. Scan line for Flight Leg tokens
+    const flightMatch = line.match(/^(?:\d+\.\s*)?([A-Z0-9]{2})\s*(\d{1,4})\s*([A-Z])?\s*(\d{1,2}[A-Z]{3})\s*([A-Z]{6})\s*(?:[A-Z0-9]{3})?\s*(\d{4})\s*(#?\d{4})/i)
     if (flightMatch) {
       const airline = flightMatch[1].toUpperCase()
       const flight_no = `${airline} ${flightMatch[2]}`
@@ -339,64 +359,102 @@ function parseGalileoTerminalText(rawText) {
     }
   }
 
-  if (name || flights.length > 0) {
-    return { name, flights }
+  // Set primary client name to first passenger
+  if (passengers.length > 0) {
+    name = passengers[0]
+  }
+
+  if (name || passengers.length > 0 || flights.length > 0) {
+    return { name, passengers, flights }
   }
   return null
 }
 
-// ── NIGHTS CALCULATION HELPER FROM CHECK IN & CHECK OUT DATES ──
+// ── DATE & NIGHTS ARITHMETIC HELPERS ──
+function parseCustomDate(str) {
+  if (!str) return null
+  const s = String(str).trim()
+
+  const monthMap = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  }
+
+  // Pattern 1: DD-MM-YY or DD-MM-YYYY (e.g. "20-06-26", "30-06-2026")
+  const matchNumeric = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
+  if (matchNumeric) {
+    const day = parseInt(matchNumeric[1], 10)
+    const month = parseInt(matchNumeric[2], 10) - 1
+    let year = parseInt(matchNumeric[3], 10)
+    if (year < 100) year = 2000 + year
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      return new Date(year, month, day)
+    }
+  }
+
+  // Pattern 2: DD-MMM-YY or DD-MMM (e.g. "20-Jun-26", "20-Jun")
+  const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
+  if (matchMonthStr) {
+    const day = parseInt(matchMonthStr[1], 10)
+    const monthStr = matchMonthStr[2].toLowerCase()
+    const monthIdx = monthMap[monthStr]
+    let year = new Date().getFullYear()
+    if (matchMonthStr[4]) {
+      const yrVal = parseInt(matchMonthStr[4], 10)
+      year = yrVal < 100 ? 2000 + yrVal : yrVal
+    }
+    if (monthIdx !== undefined && !isNaN(day)) {
+      return new Date(year, monthIdx, day)
+    }
+  }
+
+  // Pattern 3: Standard Date.parse
+  const parsed = Date.parse(s)
+  if (!isNaN(parsed)) return new Date(parsed)
+
+  return null
+}
+
+function formatDateToString(dateObj, templateStr) {
+  if (!dateObj || isNaN(dateObj.getTime())) return ''
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const monthIdx = dateObj.getMonth()
+  const yearFull = dateObj.getFullYear()
+  const yearShort = String(yearFull).slice(-2)
+
+  if (templateStr) {
+    const s = String(templateStr).trim()
+    if (/^\d{1,2}[-/\s.]+\d{1,2}[-/\s.]+\d{2,4}$/.test(s)) {
+      const monthNum = String(monthIdx + 1).padStart(2, '0')
+      const matchNum = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
+      if (matchNum && matchNum[3].length === 4) {
+        return `${day}-${monthNum}-${yearFull}`
+      }
+      return `${day}-${monthNum}-${yearShort}`
+    }
+    const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
+    if (matchMonthStr) {
+      const mStr = months[monthIdx]
+      if (matchMonthStr[4] && matchMonthStr[4].length === 4) {
+        return `${day}-${mStr}-${yearFull}`.toUpperCase()
+      }
+      if (matchMonthStr[4] && matchMonthStr[4].length === 2) {
+        return `${day}-${mStr}-${yearShort}`.toUpperCase()
+      }
+      return `${day}-${mStr}`.toUpperCase()
+    }
+  }
+
+  const mStr = months[monthIdx]
+  return `${day}-${mStr}-${yearShort}`.toUpperCase()
+}
+
 function calculateNightsFromDates(checkIn, checkOut) {
   if (!checkIn || !checkOut) return 0
-
   try {
-    const monthMap = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-    }
-
-    const parseCustomDate = (str) => {
-      if (!str) return null
-      const s = String(str).trim()
-
-      // Pattern 1: DD-MM-YY or DD-MM-YYYY (e.g. "20-06-26", "30-06-26", "10-07-26", "14-07-26")
-      const matchNumeric = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
-      if (matchNumeric) {
-        const day = parseInt(matchNumeric[1], 10)
-        const month = parseInt(matchNumeric[2], 10) - 1
-        let year = parseInt(matchNumeric[3], 10)
-        if (year < 100) year = 2000 + year
-        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          return new Date(year, month, day)
-        }
-      }
-
-      // Pattern 2: DD-MMM-YY or DD-MMM (e.g. "20-Jun-26", "20-Jun", "30-Jun")
-      const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
-      if (matchMonthStr) {
-        const day = parseInt(matchMonthStr[1], 10)
-        const monthStr = matchMonthStr[2].toLowerCase()
-        const monthIdx = monthMap[monthStr]
-        let year = new Date().getFullYear()
-        if (matchMonthStr[4]) {
-          const yrVal = parseInt(matchMonthStr[4], 10)
-          year = yrVal < 100 ? 2000 + yrVal : yrVal
-        }
-        if (monthIdx !== undefined && !isNaN(day)) {
-          return new Date(year, monthIdx, day)
-        }
-      }
-
-      // Pattern 3: Standard Date.parse
-      const parsed = Date.parse(s)
-      if (!isNaN(parsed)) return new Date(parsed)
-
-      return null
-    }
-
     const d1 = parseCustomDate(checkIn)
     const d2 = parseCustomDate(checkOut)
-
     if (d1 && d2) {
       if (d2 < d1 && d2.getMonth() < d1.getMonth()) {
         d2.setFullYear(d1.getFullYear() + 1)
@@ -408,8 +466,25 @@ function calculateNightsFromDates(checkIn, checkOut) {
   } catch (e) {
     console.error('Date parsing error:', e)
   }
-
   return 0
+}
+
+function calculateCheckoutFromCheckinAndNights(checkInStr, nights) {
+  const n = parseInt(nights, 10)
+  if (isNaN(n) || n <= 0) return ''
+  const d = parseCustomDate(checkInStr)
+  if (!d) return ''
+  d.setDate(d.getDate() + n)
+  return formatDateToString(d, checkInStr)
+}
+
+function calculateCheckinFromCheckoutAndNights(checkOutStr, nights) {
+  const n = parseInt(nights, 10)
+  if (isNaN(n) || n <= 0) return ''
+  const d = parseCustomDate(checkOutStr)
+  if (!d) return ''
+  d.setDate(d.getDate() - n)
+  return formatDateToString(d, checkOutStr)
 }
 
 export default function Clients() {
@@ -431,19 +506,19 @@ export default function Clients() {
   const [editingId, setEditingId] = useState(null)
   const [status, setStatus] = useState('Pending') // 'Pending' | 'Completed'
 
-  // Galileo Terminal Text Parser Modal States
+  // GDS Terminal Text Parser Modal States
   const [showTerminalModal, setShowTerminalModal] = useState(false)
   const [terminalInputText, setTerminalInputText] = useState('')
+  const [passengerList, setPassengerList] = useState([])
 
   const handleParseTerminalText = () => {
-    if (!terminalInputText.trim()) {
-      toast.error('Please paste Galileo GDS terminal text first')
+    if (!terminalInputText || !terminalInputText.trim()) {
+      toast.error('Please paste GDS terminal text first')
       return
     }
-
     const result = parseGalileoTerminalText(terminalInputText)
-    if (!result) {
-      toast.error('Could not find Galileo name or flight lines in pasted text')
+    if (!result || (!result.passengers?.length && !result.flights?.length)) {
+      toast.error('Could not find GDS name or flight lines in pasted text')
       return
     }
 
@@ -451,11 +526,17 @@ export default function Clients() {
       setHeader(h => ({ ...h, name: result.name }))
     }
 
+    if (Array.isArray(result.passengers) && result.passengers.length > 0) {
+      setPassengerList(result.passengers)
+      setPax(p => ({ ...p, adt: String(result.passengers.length) }))
+    }
+
     if (Array.isArray(result.flights) && result.flights.length > 0) {
       setFlightItinerary(result.flights)
     }
 
-    toast.success(`Extracted ${result.flights.length} flights & Passenger "${result.name || 'Pax'}" offline!`, { id: 'gds-local-success' })
+    const paxCount = result.passengers?.length || 1
+    toast.success(`Extracted ${paxCount} passenger(s) & ${result.flights?.length || 0} flight leg(s)! Lead Pax: "${result.name}"`, { id: 'gds-local-success' })
     setShowTerminalModal(false)
     setTerminalInputText('')
   }
@@ -499,6 +580,7 @@ export default function Clients() {
   ])
 
   const [hidePdfBreakup, setHidePdfBreakup] = useState(false)
+  const [showCompanyDetails, setShowCompanyDetails] = useState(true)
 
   // Currency Conversion Rate / Multiplier State
   const [conversionRate, setConversionRate] = useState('')
@@ -519,6 +601,28 @@ export default function Clients() {
   const [userApiKey, setUserApiKey] = useState(apiKey || '')
   const [showKeyInput, setShowKeyInput] = useState(!apiKey)
   const [showPrintModal, setShowPrintModal] = useState(false) // false | 'standard' | 'color'
+
+  // Invoice Modal & Data States
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [invoiceData, setInvoiceData] = useState({
+    invoiceNo: '',
+    invoiceDate: '',
+    dueDate: '',
+    clientName: '',
+    phone: '',
+    whatsapp: '',
+    email: '',
+    items: [],
+    subtotal: 0,
+    discount: '0',
+    totalAmount: 0,
+    amountPaid: '0',
+    balanceDue: 0,
+    status: 'UNPAID',
+    paymentMethod: 'Bank Transfer',
+    bankDetails: 'Meezan Bank - A/C 0102030405',
+    remarks: 'Thank you for your business. Balance due prior to flight departure.'
+  })
 
   // Camera modal state
   const [cameraOpen, setCameraOpen] = useState(false)
@@ -864,6 +968,370 @@ export default function Clients() {
     setFlightItinerary(prev => prev.map((f, i) => i === idx ? { ...f, [field]: value } : f))
   }
 
+  // ── INVOICE GENERATOR & HANDLERS ──
+  const handleOpenInvoiceModal = () => {
+    if (!header.name.trim()) {
+      toast.error('Please enter a Client Name first.', { id: 'inv-err-name' })
+      return
+    }
+
+    // 1. Ticket Section (ALL passenger names + sector + price)
+    let autoPassengers = []
+    const flightSector = flightItinerary.map(f => f.sector).filter(Boolean).join(' / ') || 'KHI-JED-KHI'
+    const ticketVal = Number(activeTicketTotal || computedTicketTotal || 0)
+
+    if (passengerList && passengerList.length > 0) {
+      const perTicketVal = ticketVal > 0 ? Math.round(ticketVal / passengerList.length) : 0
+      autoPassengers = passengerList.map((pName) => ({
+        date: header.date || new Date().toISOString().slice(0, 10),
+        ticketNo: '',
+        passengerName: pName,
+        sector: flightSector,
+        amount: perTicketVal
+      }))
+    } else if (header.name) {
+      autoPassengers = [
+        {
+          date: header.date || new Date().toISOString().slice(0, 10),
+          ticketNo: '',
+          passengerName: header.name,
+          sector: flightSector,
+          amount: ticketVal
+        }
+      ]
+    }
+
+    // Conversion Multiplier (Defaults to 1 if empty or 0)
+    const rateMultiplier = Number(conversionRate) > 0 ? Number(conversionRate) : 1
+
+    // 2. Visa Section (ALL passenger names + visa type + price in PKR)
+    let autoVisas = []
+    if (visaTotal > 0 || visa.type) {
+      const perVisaPrice = Number(visa.price || 0) * rateMultiplier
+      const totalVisaVal = (visaTotal > 0 ? visaTotal : (Number(visa.price || 0) * Number(visa.qty || 1))) * rateMultiplier
+
+      if (passengerList && passengerList.length > 0) {
+        const perPaxVisa = totalVisaVal > 0 ? Math.round(totalVisaVal / passengerList.length) : perVisaPrice
+        autoVisas = passengerList.map((pName) => ({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          passengerName: pName,
+          visaType: `${visa.type || 'UMRAH VISA'} PROCESSING`,
+          amount: perPaxVisa
+        }))
+      } else {
+        autoVisas = [
+          {
+            date: header.date || new Date().toISOString().slice(0, 10),
+            passengerName: header.name || 'CLIENT',
+            visaType: `${visa.type || 'UMRAH VISA'} (QTY: ${visa.qty || 1})`,
+            amount: totalVisaVal
+          }
+        ]
+      }
+    }
+
+    // 3. Hotel Section (Hotel Name + Room details + Nights + Converted Price - NO passenger names!)
+    let autoHotels = []
+    makkahHotels.forEach((h) => {
+      if (h.hotel_name) {
+        const calcN = calculateNightsFromDates(h.check_in, h.check_out)
+        const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
+        const qty = Number(h.room_qty || 1)
+        const pricePKR = Number(h.night_price || 0) * rateMultiplier
+        autoHotels.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          hotelName: `MAKKAH HOTEL: ${h.hotel_name.toUpperCase()}`,
+          roomType: h.room_type ? h.room_type.toUpperCase() : 'STANDARD ROOM',
+          roomQty: qty,
+          checkIn: h.check_in || '',
+          checkOut: h.check_out || '',
+          nights: nights,
+          amount: qty * nights * pricePKR
+        })
+      }
+    })
+
+    madinaHotels.forEach((h) => {
+      if (h.hotel_name) {
+        const calcN = calculateNightsFromDates(h.check_in, h.check_out)
+        const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
+        const qty = Number(h.room_qty || 1)
+        const pricePKR = Number(h.night_price || 0) * rateMultiplier
+        autoHotels.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          hotelName: `MADINA HOTEL: ${h.hotel_name.toUpperCase()}`,
+          roomType: h.room_type ? h.room_type.toUpperCase() : 'STANDARD ROOM',
+          roomQty: qty,
+          checkIn: h.check_in || '',
+          checkOut: h.check_out || '',
+          nights: nights,
+          amount: qty * nights * pricePKR
+        })
+      }
+    })
+
+    // 4. Transport Section (Sector & Vehicle Type ONLY - Converted Price)
+    let autoTransports = []
+    transportRows.forEach((t) => {
+      if (t.type || t.sector) {
+        const qty = Number(t.qty || 1)
+        const pricePKR = Number(t.price || 0) * rateMultiplier
+        autoTransports.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          vehicleType: (t.type || 'PRIVATE CAR').toUpperCase(),
+          sector: (t.sector || 'FULL SECTOR').toUpperCase(),
+          qty: qty,
+          amount: qty * pricePKR
+        })
+      }
+    })
+
+    // Fallback item if no sections have items
+    const autoItems = []
+    if (autoPassengers.length === 0 && autoVisas.length === 0 && autoHotels.length === 0 && autoTransports.length === 0) {
+      const fallbackVal = Number(activePackageWithTicket || activePackageOnly || 0)
+      autoItems.push({
+        description: 'PACKAGE / SERVICE CHARGES',
+        amount: fallbackVal
+      })
+    }
+
+    const tktTotal = autoPassengers.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+    const visaTotalSum = autoVisas.reduce((sum, v) => sum + Number(v.amount || 0), 0)
+    const hotelTotalSum = autoHotels.reduce((sum, h) => sum + Number(h.amount || 0), 0)
+    const transportTotalSum = autoTransports.reduce((sum, t) => sum + Number(t.amount || 0), 0)
+    const generalTotalSum = autoItems.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+
+    const calculatedSubtotal = tktTotal + visaTotalSum + hotelTotalSum + transportTotalSum + generalTotalSum
+
+    setInvoiceData({
+      invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      dueDate: '',
+      clientName: header.name,
+      phone: header.phone || '',
+      whatsapp: header.whatsapp || '',
+      email: header.email || '',
+      ticketPassengers: autoPassengers,
+      visaPassengers: autoVisas,
+      hotelItems: autoHotels,
+      transportItems: autoTransports,
+      items: autoItems,
+      subtotal: calculatedSubtotal,
+      discount: '0',
+      totalAmount: calculatedSubtotal,
+      amountPaid: '0',
+      balanceDue: calculatedSubtotal,
+      status: 'UNPAID',
+      paymentMethod: 'Bank Transfer',
+      bankDetails: 'Meezan Bank - A/C 0102030405',
+      remarks: 'Thank you for your business. Balance due prior to flight departure.'
+    })
+
+    setShowInvoiceModal(true)
+  }
+
+  const handleAddPaymentItem = () => {
+    setInvoiceData(prev => {
+      const existingPayments = prev.payments || []
+      const newPayment = {
+        date: prev.invoiceDate || new Date().toISOString().slice(0, 10),
+        voucherNo: `RV-${101 + existingPayments.length}`,
+        description: 'PAYMENT RECEIVED',
+        paymentMethod: prev.paymentMethod || 'Bank Transfer',
+        amount: 0
+      }
+      const updatedPayments = [...existingPayments, newPayment]
+      const totalPaidSum = updatedPayments.reduce((sum, pm) => sum + Number(pm.amount || 0), 0)
+      const netTotal = Number(prev.totalAmount || 0)
+      const newBalance = Math.max(0, netTotal - totalPaidSum)
+      const newStatus = newBalance <= 0 ? 'PAID' : (totalPaidSum > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        payments: updatedPayments,
+        amountPaid: totalPaidSum,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleRemovePaymentItem = (idx) => {
+    setInvoiceData(prev => {
+      const updatedPayments = (prev.payments || []).filter((_, i) => i !== idx)
+      const totalPaidSum = updatedPayments.reduce((sum, pm) => sum + Number(pm.amount || 0), 0)
+      const netTotal = Number(prev.totalAmount || 0)
+      const newBalance = Math.max(0, netTotal - totalPaidSum)
+      const newStatus = newBalance <= 0 ? 'PAID' : (totalPaidSum > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        payments: updatedPayments,
+        amountPaid: totalPaidSum,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleUpdatePaymentItem = (idx, field, value) => {
+    setInvoiceData(prev => {
+      const updatedPayments = (prev.payments || []).map((pm, i) => i === idx ? { ...pm, [field]: value } : pm)
+      const totalPaidSum = updatedPayments.reduce((sum, pm) => sum + Number(pm.amount || 0), 0)
+      const netTotal = Number(prev.totalAmount || 0)
+      const newBalance = Math.max(0, netTotal - totalPaidSum)
+      const newStatus = newBalance <= 0 ? 'PAID' : (totalPaidSum > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        payments: updatedPayments,
+        amountPaid: totalPaidSum,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleAddInvoiceItem = () => {
+    setInvoiceData(prev => {
+      const updatedItems = [...prev.items, { description: 'EXTRA SERVICE / CHARGE', amount: 0 }]
+      const tktSum = (prev.ticketPassengers || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const genSum = updatedItems.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const newSubtotal = tktSum + genSum
+      const discountVal = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - discountVal)
+      const paidVal = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paidVal)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paidVal > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        items: updatedItems,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleAddPassengerItem = () => {
+    setInvoiceData(prev => {
+      const updatedPass = [...(prev.ticketPassengers || []), { date: prev.invoiceDate, invoiceNo: prev.invoiceNo, ticketNo: '', passengerName: 'PASSENGER NAME', sector: 'KHI-JED-KHI', classType: 'Y', amount: 0 }]
+      const tktSum = updatedPass.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const genSum = prev.items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const newSubtotal = tktSum + genSum
+      const disc = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - disc)
+      const paid = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paid)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        ticketPassengers: updatedPass,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleRemovePassengerItem = (idx) => {
+    setInvoiceData(prev => {
+      const updatedPass = (prev.ticketPassengers || []).filter((_, i) => i !== idx)
+      const tktSum = updatedPass.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const genSum = prev.items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const newSubtotal = tktSum + genSum
+      const disc = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - disc)
+      const paid = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paid)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        ticketPassengers: updatedPass,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleUpdatePassengerItem = (idx, field, value) => {
+    setInvoiceData(prev => {
+      const updatedPass = (prev.ticketPassengers || []).map((p, i) => i === idx ? { ...p, [field]: value } : p)
+      const tktSum = updatedPass.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+      const genSum = prev.items.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const newSubtotal = tktSum + genSum
+      const disc = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - disc)
+      const paid = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paid)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paid > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        ticketPassengers: updatedPass,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleRemoveInvoiceItem = (index) => {
+    setInvoiceData(prev => {
+      const updatedItems = prev.items.filter((_, i) => i !== index)
+      const newSubtotal = updatedItems.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const discountVal = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - discountVal)
+      const paidVal = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paidVal)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paidVal > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        items: updatedItems,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
+  const handleUpdateInvoiceItem = (index, field, value) => {
+    setInvoiceData(prev => {
+      const updatedItems = prev.items.map((item, i) => {
+        if (i === index) {
+          return { ...item, [field]: field === 'amount' ? value : value }
+        }
+        return item
+      })
+      const newSubtotal = updatedItems.reduce((sum, i) => sum + Number(i.amount || 0), 0)
+      const discountVal = Number(prev.discount || 0)
+      const netTotal = Math.max(0, newSubtotal - discountVal)
+      const paidVal = Number(prev.amountPaid || 0)
+      const newBalance = Math.max(0, netTotal - paidVal)
+      const newStatus = newBalance <= 0 ? 'PAID' : (paidVal > 0 ? 'PARTIAL' : 'UNPAID')
+
+      return {
+        ...prev,
+        items: updatedItems,
+        subtotal: newSubtotal,
+        totalAmount: netTotal,
+        balanceDue: newBalance,
+        status: newStatus
+      }
+    })
+  }
+
   // Camera handlers
   const openCamera = async (target) => {
     setCameraTarget(target)
@@ -953,20 +1421,36 @@ export default function Clients() {
   }
 
   const handleClearForm = () => {
+    const todayStr = new Date().toISOString().slice(0, 10)
     setEditingId(null)
     setStatus('Pending')
-    setHeader({ sr_no: (savedClients.length + 1).toString().padStart(2, '0'), name: '', phone: '', whatsapp: '', email: '', date: getTodayDateFormatted() })
+    setHeader({
+      sr_no: (savedClients.length + 1).toString().padStart(2, '0'),
+      name: '',
+      phone: '',
+      whatsapp: '',
+      email: '',
+      date: todayStr
+    })
+    setPassengerList([])
     setPax({ adt: '', adt_price: '', child: '', child_price: '', infant: '', infant_price: '', ticket_total: '' })
     setFlightItinerary([])
-    setVisa({ type: '', qty: '', price: '' })
+    setVisa({ type: 'UMRAH', qty: '', price: '' })
     setMakkahHotels([{ hotel_name: '', room_qty: '', room_type: '', check_in: '', check_out: '', nights: '', night_price: '' }])
     setMadinaHotels([{ hotel_name: '', room_qty: '', room_type: '', check_in: '', check_out: '', nights: '', night_price: '' }])
     setTransportRows([{ type: '', qty: '', sector: '', price: '' }])
+    setHidePdfBreakup(false)
     setConversionRate('')
     setTotals({ package_only: '', package_with_ticket: '' })
     setComments('')
     setTicketPreviewImg(null)
     setPackagePreviewImg(null)
+    setTerminalInputText('')
+
+    if (editIdParam) {
+      navigate('/clients', { replace: true })
+    }
+
     toast.success('Full form reset cleanly', { id: 'clear-form' })
   }
 
@@ -1076,37 +1560,37 @@ export default function Clients() {
   }
 
   // PDF Export
-  const handleSavePdf = async () => {
-    const elementId = showPrintModal === 'color' ? 'printable-color-package' : 'printable-package'
-    const element = document.getElementById(elementId) || document.getElementById('printable-color-package')
-    if (!element) return
+  const handleSavePdf = () => {
+    const targetElementId = showPrintModal === 'color' ? 'printable-color-package' : 'printable-package'
+    downloadPdf(targetElementId)
+  }
+
+  const downloadPdf = async (elementId, customFileName) => {
+    const targetId = elementId || (showPrintModal === 'color' ? 'printable-color-package' : 'printable-package')
+    const element = document.getElementById(targetId) || document.getElementById('printable-color-package') || document.getElementById('printable-package')
+    if (!element) {
+      toast.error('Printable element not found')
+      return
+    }
 
     const clientName = header?.name || 'Client'
-    const fileName = `client-${clientName.toLowerCase().replace(/\s+/g, '-')}-package.pdf`
+    const fileName = customFileName || `client-${clientName.toLowerCase().replace(/\s+/g, '-')}-voucher.pdf`
+    toast.loading('Generating & downloading PDF...', { id: 'pdf-gen' })
 
     const options = {
-      margin: 5,
+      margin: [5, 5, 5, 5],
       filename: fileName,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0, windowWidth: 1200 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }
 
     try {
-      const worker = html2pdf().from(element).set(options)
-      const pdfBlob = await worker.output('blob')
-      const blob = new Blob([pdfBlob], { type: 'application/pdf' })
-      const blobUrl = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 3000)
+      await html2pdf().set(options).from(element).save()
+      toast.success('PDF downloaded successfully!', { id: 'pdf-gen' })
     } catch (err) {
       console.error('PDF generation error:', err)
+      toast.error('PDF generation failed, opening print window...', { id: 'pdf-gen' })
       window.print()
     }
   }
@@ -1232,6 +1716,13 @@ export default function Clients() {
               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-sm"
             >
               <i className="ti ti-palette" /> Color PDF
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenInvoiceModal}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-sm"
+            >
+              <i className="ti ti-receipt text-sm" /> Create Invoice
             </button>
             <button
               type="button"
@@ -1370,7 +1861,7 @@ export default function Clients() {
                   type="button"
                   onClick={() => setShowTerminalModal(true)}
                   className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[11px] font-bold py-2 px-2 rounded-lg flex items-center justify-center gap-1 transition-all"
-                  title="Paste Galileo GDS terminal text (Instant Offline, 0 API Calls)"
+                  title="Paste GDS terminal text (Instant Offline, 0 API Calls)"
                 >
                   <i className="ti ti-terminal-2 text-sm text-emerald-600" />
                   Paste GDS Text
@@ -1873,9 +2364,16 @@ export default function Clients() {
                               value={h.check_in}
                               onChange={(e) => {
                                 const copy = [...makkahHotels]
-                                copy[i].check_in = e.target.value
-                                const calcN = calculateNightsFromDates(e.target.value, copy[i].check_out)
-                                if (calcN > 0) copy[i].nights = String(calcN)
+                                const val = e.target.value
+                                copy[i].check_in = val
+                                copy[i].last_edited = 'check_in'
+                                if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                  const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
+                                  if (calcOut) copy[i].check_out = calcOut
+                                } else if (copy[i].check_out) {
+                                  const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                }
                                 setMakkahHotels(copy)
                               }}
                               placeholder="Check In"
@@ -1890,9 +2388,16 @@ export default function Clients() {
                               onChange={(e) => {
                                 if (e.target.value) {
                                   const copy = [...makkahHotels]
-                                  copy[i].check_in = formatDateFromPicker(e.target.value)
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                  const val = formatDateFromPicker(e.target.value)
+                                  copy[i].check_in = val
+                                  copy[i].last_edited = 'check_in'
+                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                    const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
+                                    if (calcOut) copy[i].check_out = calcOut
+                                  } else if (copy[i].check_out) {
+                                    const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                    if (calcN > 0) copy[i].nights = String(calcN)
+                                  }
                                   setMakkahHotels(copy)
                                 }
                               }}
@@ -1907,9 +2412,16 @@ export default function Clients() {
                               value={h.check_out}
                               onChange={(e) => {
                                 const copy = [...makkahHotels]
-                                copy[i].check_out = e.target.value
-                                const calcN = calculateNightsFromDates(copy[i].check_in, e.target.value)
-                                if (calcN > 0) copy[i].nights = String(calcN)
+                                const val = e.target.value
+                                copy[i].check_out = val
+                                copy[i].last_edited = 'check_out'
+                                if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                  const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
+                                  if (calcIn) copy[i].check_in = calcIn
+                                } else if (copy[i].check_in) {
+                                  const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                }
                                 setMakkahHotels(copy)
                               }}
                               placeholder="Check Out"
@@ -1924,9 +2436,16 @@ export default function Clients() {
                               onChange={(e) => {
                                 if (e.target.value) {
                                   const copy = [...makkahHotels]
-                                  copy[i].check_out = formatDateFromPicker(e.target.value)
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                  const val = formatDateFromPicker(e.target.value)
+                                  copy[i].check_out = val
+                                  copy[i].last_edited = 'check_out'
+                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                    const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
+                                    if (calcIn) copy[i].check_in = calcIn
+                                  } else if (copy[i].check_in) {
+                                    const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                    if (calcN > 0) copy[i].nights = String(calcN)
+                                  }
                                   setMakkahHotels(copy)
                                 }
                               }}
@@ -1934,7 +2453,30 @@ export default function Clients() {
                             />
                           </div>
                         </td>
-                        <td className="p-2"><input type="number" value={h.nights} onChange={(e) => { const copy = [...makkahHotels]; copy[i].nights = e.target.value; setMakkahHotels(copy) }} placeholder="Nights" className="w-full border rounded px-1.5 py-1 text-xs text-center" /></td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            value={h.nights}
+                            onChange={(e) => {
+                              const copy = [...makkahHotels]
+                              const nVal = e.target.value
+                              copy[i].nights = nVal
+                              if (copy[i].last_edited === 'check_out' && copy[i].check_out) {
+                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                if (calcIn) copy[i].check_in = calcIn
+                              } else if (copy[i].check_in) {
+                                const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                if (calcOut) copy[i].check_out = calcOut
+                              } else if (copy[i].check_out) {
+                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                if (calcIn) copy[i].check_in = calcIn
+                              }
+                              setMakkahHotels(copy)
+                            }}
+                            placeholder="Nights"
+                            className="w-full border rounded px-1.5 py-1 text-xs text-center"
+                          />
+                        </td>
                         <td className="p-2"><input type="text" value={h.night_price} onChange={(e) => { const copy = [...makkahHotels]; copy[i].night_price = e.target.value; setMakkahHotels(copy) }} placeholder="Price" className="w-full border rounded px-1.5 py-1 text-xs font-semibold" /></td>
                         <td className="p-2 text-center">
                           {makkahHotels.length > 1 && (
@@ -1988,9 +2530,16 @@ export default function Clients() {
                               value={h.check_in}
                               onChange={(e) => {
                                 const copy = [...madinaHotels]
-                                copy[i].check_in = e.target.value
-                                const calcN = calculateNightsFromDates(e.target.value, copy[i].check_out)
-                                if (calcN > 0) copy[i].nights = String(calcN)
+                                const val = e.target.value
+                                copy[i].check_in = val
+                                copy[i].last_edited = 'check_in'
+                                if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                  const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
+                                  if (calcOut) copy[i].check_out = calcOut
+                                } else if (copy[i].check_out) {
+                                  const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                }
                                 setMadinaHotels(copy)
                               }}
                               placeholder="Check In"
@@ -2005,9 +2554,16 @@ export default function Clients() {
                               onChange={(e) => {
                                 if (e.target.value) {
                                   const copy = [...madinaHotels]
-                                  copy[i].check_in = formatDateFromPicker(e.target.value)
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                  const val = formatDateFromPicker(e.target.value)
+                                  copy[i].check_in = val
+                                  copy[i].last_edited = 'check_in'
+                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                    const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
+                                    if (calcOut) copy[i].check_out = calcOut
+                                  } else if (copy[i].check_out) {
+                                    const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                    if (calcN > 0) copy[i].nights = String(calcN)
+                                  }
                                   setMadinaHotels(copy)
                                 }
                               }}
@@ -2022,9 +2578,16 @@ export default function Clients() {
                               value={h.check_out}
                               onChange={(e) => {
                                 const copy = [...madinaHotels]
-                                copy[i].check_out = e.target.value
-                                const calcN = calculateNightsFromDates(copy[i].check_in, e.target.value)
-                                if (calcN > 0) copy[i].nights = String(calcN)
+                                const val = e.target.value
+                                copy[i].check_out = val
+                                copy[i].last_edited = 'check_out'
+                                if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                  const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
+                                  if (calcIn) copy[i].check_in = calcIn
+                                } else if (copy[i].check_in) {
+                                  const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                }
                                 setMadinaHotels(copy)
                               }}
                               placeholder="Check Out"
@@ -2039,9 +2602,16 @@ export default function Clients() {
                               onChange={(e) => {
                                 if (e.target.value) {
                                   const copy = [...madinaHotels]
-                                  copy[i].check_out = formatDateFromPicker(e.target.value)
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
+                                  const val = formatDateFromPicker(e.target.value)
+                                  copy[i].check_out = val
+                                  copy[i].last_edited = 'check_out'
+                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
+                                    const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
+                                    if (calcIn) copy[i].check_in = calcIn
+                                  } else if (copy[i].check_in) {
+                                    const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                    if (calcN > 0) copy[i].nights = String(calcN)
+                                  }
                                   setMadinaHotels(copy)
                                 }
                               }}
@@ -2049,7 +2619,30 @@ export default function Clients() {
                             />
                           </div>
                         </td>
-                        <td className="p-2"><input type="number" value={h.nights} onChange={(e) => { const copy = [...madinaHotels]; copy[i].nights = e.target.value; setMadinaHotels(copy) }} placeholder="Nights" className="w-full border rounded px-1.5 py-1 text-xs text-center" /></td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            value={h.nights}
+                            onChange={(e) => {
+                              const copy = [...madinaHotels]
+                              const nVal = e.target.value
+                              copy[i].nights = nVal
+                              if (copy[i].last_edited === 'check_out' && copy[i].check_out) {
+                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                if (calcIn) copy[i].check_in = calcIn
+                              } else if (copy[i].check_in) {
+                                const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                if (calcOut) copy[i].check_out = calcOut
+                              } else if (copy[i].check_out) {
+                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                if (calcIn) copy[i].check_in = calcIn
+                              }
+                              setMadinaHotels(copy)
+                            }}
+                            placeholder="Nights"
+                            className="w-full border rounded px-1.5 py-1 text-xs text-center"
+                          />
+                        </td>
                         <td className="p-2"><input type="text" value={h.night_price} onChange={(e) => { const copy = [...madinaHotels]; copy[i].night_price = e.target.value; setMadinaHotels(copy) }} placeholder="Price" className="w-full border rounded px-1.5 py-1 text-xs font-semibold" /></td>
                         <td className="p-2 text-center">
                           {madinaHotels.length > 1 && (
@@ -2235,11 +2828,21 @@ export default function Clients() {
                 <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-200 transition-all select-none">
                   <input
                     type="checkbox"
+                    checked={showCompanyDetails}
+                    onChange={(e) => setShowCompanyDetails(e.target.checked)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                  />
+                  <i className="ti ti-building text-emerald-600" />
+                  <span>Company Details (Logo & Address)</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-200 transition-all select-none">
+                  <input
+                    type="checkbox"
                     checked={hidePdfBreakup}
                     onChange={(e) => setHidePdfBreakup(e.target.checked)}
                     className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
                   />
-                  <span>Hide Item Breakup Amounts in PDF</span>
+                  <span>Hide Item Breakup</span>
                 </label>
                 <button
                   onClick={handleSavePdf}
@@ -2280,6 +2883,7 @@ export default function Clients() {
                   totals={{ package_only: activePackageOnly, package_with_ticket: activePackageWithTicket }}
                   comments={comments}
                   hideBreakup={hidePdfBreakup}
+                  showCompanyDetails={showCompanyDetails}
                 />
               ) : (
                 <StandardPdfTemplate 
@@ -2297,6 +2901,7 @@ export default function Clients() {
                   totals={{ package_only: activePackageOnly, package_with_ticket: activePackageWithTicket }}
                   comments={comments}
                   hideBreakup={hidePdfBreakup}
+                  showCompanyDetails={showCompanyDetails}
                 />
               )}
             </div>
@@ -2312,7 +2917,7 @@ export default function Clients() {
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-emerald-50/70">
               <h3 className="text-xs font-bold text-emerald-900 uppercase tracking-wide flex items-center gap-2">
                 <i className="ti ti-terminal-2 text-emerald-600 text-base" />
-                Paste Galileo GDS Terminal PNR (Offline ⚡)
+                Paste GDS Terminal PNR (Offline ⚡)
               </h3>
               <button
                 onClick={() => setShowTerminalModal(false)}
@@ -2324,7 +2929,7 @@ export default function Clients() {
 
             <div className="p-5 space-y-3 text-xs">
               <div className="bg-gray-900 text-emerald-400 font-mono text-[11px] p-2.5 rounded-lg border border-gray-800 space-y-1">
-                <p className="text-gray-400 text-[10px] uppercase font-sans font-semibold border-b border-gray-800 pb-1">Example Galileo Text:</p>
+                <p className="text-gray-400 text-[10px] uppercase font-sans font-semibold border-b border-gray-800 pb-1">Example GDS Text:</p>
                 <p>1.1SURNAME/GIVEN NAME</p>
                 <p>1. SV 701 Y 20AUG KHIJED HS1 0920 1115 0</p>
                 <p>2. SV 1054 M 30AUG JEDRUH HS1 2355 #0140 0</p>
@@ -2332,7 +2937,7 @@ export default function Clients() {
 
               <textarea
                 rows="5"
-                placeholder="Paste Galileo PNR terminal lines here..."
+                placeholder="Paste GDS PNR terminal lines here..."
                 value={terminalInputText}
                 onChange={e => setTerminalInputText(e.target.value)}
                 className="w-full font-mono text-xs p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 bg-gray-50"
@@ -2353,6 +2958,419 @@ export default function Clients() {
                 >
                   <i className="ti ti-bolt text-sm" />
                   Parse Offline Instant
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CLIENT PAYMENT INVOICE GENERATOR MODAL ── */}
+      {showInvoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl overflow-hidden border border-gray-200 flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-150">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-slate-900 text-white">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-400/30 flex items-center justify-center font-bold text-purple-300">
+                  <i className="ti ti-receipt text-lg" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-white">Client Payment Invoice Generator</h3>
+                  <p className="text-[11px] text-slate-300">Billed to: <span className="text-purple-300 font-bold">{invoiceData.clientName}</span> | Invoice #{invoiceData.invoiceNo}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInvoiceModal(false)}
+                className="text-slate-400 hover:text-white text-2xl font-bold leading-none transition-colors"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body: Left Controls & Right Live Preview */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 bg-slate-50">
+              
+              {/* Left Panel: Invoice Form Controls */}
+              <div className="lg:col-span-5 space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs text-xs">
+                <div className="font-bold text-slate-900 border-b border-slate-100 pb-2 uppercase tracking-wide flex items-center gap-1.5">
+                  <i className="ti ti-adjustments text-blue-600" /> Invoice Settings & Financials
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">INVOICE NO</label>
+                    <input
+                      type="text"
+                      value={invoiceData.invoiceNo}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, invoiceNo: e.target.value })}
+                      className="w-full border rounded px-2.5 py-1.5 font-bold font-mono text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DATE</label>
+                    <input
+                      type="date"
+                      value={invoiceData.invoiceDate}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, invoiceDate: e.target.value })}
+                      className="w-full border rounded px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">PAYMENT METHOD</label>
+                    <select
+                      value={invoiceData.paymentMethod}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, paymentMethod: e.target.value })}
+                      className="w-full border rounded px-2 py-1.5 text-xs font-bold text-slate-800 bg-white"
+                    >
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Online / Raast">Online / Raast</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Card">Card Payment</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DUE DATE (OPTIONAL)</label>
+                    <input
+                      type="date"
+                      value={invoiceData.dueDate}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, dueDate: e.target.value })}
+                      className="w-full border rounded px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Ticket Passengers Section */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-slate-800 uppercase flex items-center gap-1">
+                      <i className="ti ti-ticket text-indigo-600" /> Ticket Passengers ({invoiceData.ticketPassengers?.length || 0})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddPassengerItem}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                    >
+                      <i className="ti ti-plus" /> Add Passenger Leg
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {(invoiceData.ticketPassengers || []).map((pass, idx) => (
+                      <div key={`inv-pass-edit-${idx}`} className="bg-indigo-50/50 p-2 rounded-lg border border-indigo-100 space-y-1 text-xs">
+                        <div className="grid grid-cols-12 gap-1.5 items-center">
+                          <div className="col-span-7">
+                            <input
+                              type="text"
+                              value={pass.passengerName}
+                              onChange={(e) => handleUpdatePassengerItem(idx, 'passengerName', e.target.value)}
+                              className="w-full border rounded px-2 py-1 text-xs font-bold text-slate-900 bg-white"
+                              placeholder="PASSENGER NAME"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <input
+                              type="number"
+                              value={pass.amount}
+                              onChange={(e) => handleUpdatePassengerItem(idx, 'amount', Number(e.target.value))}
+                              className="w-full border rounded px-2 py-1 text-xs font-mono font-bold text-right bg-white"
+                              placeholder="FARE / NET"
+                            />
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePassengerItem(idx)}
+                              className="text-red-500 hover:text-red-700"
+                              title="Remove passenger leg"
+                            >
+                              <i className="ti ti-trash" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                          <input
+                            type="text"
+                            value={pass.ticketNo}
+                            onChange={(e) => handleUpdatePassengerItem(idx, 'ticketNo', e.target.value)}
+                            className="w-full border rounded px-2 py-0.5 font-mono text-[10px] bg-white"
+                            placeholder="TICKET NO (e.g. 176-5580-274)"
+                          />
+                          <input
+                            type="text"
+                            value={pass.sector}
+                            onChange={(e) => handleUpdatePassengerItem(idx, 'sector', e.target.value)}
+                            className="w-full border rounded px-2 py-0.5 font-mono text-[10px] bg-white"
+                            placeholder="SECTOR (e.g. KHI-FRA 05/03)"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Line Items Editable Table */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-slate-800 uppercase">Itemized Services ({invoiceData.items.length})</span>
+                    <button
+                      type="button"
+                      onClick={handleAddInvoiceItem}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                    >
+                      <i className="ti ti-plus" /> Add Service Row
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {invoiceData.items.map((item, idx) => (
+                      <div key={`inv-row-edit-${idx}`} className="grid grid-cols-12 gap-1.5 items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <div className="col-span-7">
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) => handleUpdateInvoiceItem(idx, 'description', e.target.value)}
+                            className="w-full border rounded px-2 py-1 text-xs font-semibold"
+                            placeholder="Description"
+                          />
+                        </div>
+                        <div className="col-span-4">
+                          <input
+                            type="number"
+                            value={item.amount}
+                            onChange={(e) => handleUpdateInvoiceItem(idx, 'amount', Number(e.target.value))}
+                            className="w-full border rounded px-2 py-1 text-xs font-bold text-right font-mono"
+                            placeholder="Amount"
+                          />
+                        </div>
+                        <div className="col-span-1 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveInvoiceItem(idx)}
+                            className="text-red-500 hover:text-red-700"
+                            title="Remove row"
+                          >
+                            <i className="ti ti-trash" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Financial Adjustments */}
+                <div className="space-y-2 pt-2 border-t border-slate-100 bg-purple-50/40 p-3 rounded-xl border border-purple-100">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DISCOUNT / DEDUCTION</label>
+                    <input
+                      type="number"
+                      value={invoiceData.discount}
+                      onChange={(e) => {
+                        const discVal = Number(e.target.value || 0)
+                        const netTotal = Math.max(0, invoiceData.subtotal - discVal)
+                        const paidVal = Number(invoiceData.amountPaid || 0)
+                        const newBalance = Math.max(0, netTotal - paidVal)
+                        const newStatus = newBalance <= 0 ? 'PAID' : (paidVal > 0 ? 'PARTIAL' : 'UNPAID')
+                        setInvoiceData({
+                          ...invoiceData,
+                          discount: e.target.value,
+                          totalAmount: netTotal,
+                          balanceDue: newBalance,
+                          status: newStatus
+                        })
+                      }}
+                      className="w-full border rounded px-2 py-1 text-xs font-bold text-right font-mono bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                {/* Payments Received Section */}
+                <div className="space-y-2 pt-2 border-t border-emerald-200 bg-emerald-50/40 p-2 rounded-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[11px] text-emerald-900 uppercase flex items-center gap-1">
+                      <i className="ti ti-cash-banknote text-emerald-600" /> Payments Received ({invoiceData.payments?.length || 0})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddPaymentItem}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+                    >
+                      <i className="ti ti-plus" /> + Add Payment Receipt
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {(invoiceData.payments || []).map((pm, idx) => (
+                      <div key={`inv-pay-edit-${idx}`} className="bg-white p-2 rounded-lg border border-emerald-200 space-y-1 text-xs">
+                        <div className="grid grid-cols-12 gap-1.5 items-center">
+                          <div className="col-span-4">
+                            <input
+                              type="date"
+                              value={pm.date}
+                              onChange={(e) => handleUpdatePaymentItem(idx, 'date', e.target.value)}
+                              className="w-full border rounded px-1.5 py-0.5 text-[11px] font-mono"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <select
+                              value={pm.paymentMethod || 'Bank Transfer'}
+                              onChange={(e) => handleUpdatePaymentItem(idx, 'paymentMethod', e.target.value)}
+                              className="w-full border rounded px-1 py-0.5 text-[11px] font-bold text-slate-800"
+                            >
+                              <option value="Bank Transfer">Bank Transfer</option>
+                              <option value="Cash">Cash</option>
+                              <option value="Online / Raast">Online / Raast</option>
+                              <option value="Cheque">Cheque</option>
+                              <option value="Card">Card</option>
+                            </select>
+                          </div>
+                          <div className="col-span-3">
+                            <input
+                              type="number"
+                              value={pm.amount}
+                              onChange={(e) => handleUpdatePaymentItem(idx, 'amount', Number(e.target.value))}
+                              className="w-full border border-emerald-300 rounded px-1.5 py-0.5 text-xs font-mono font-black text-right text-emerald-900"
+                              placeholder="AMOUNT"
+                            />
+                          </div>
+                          <div className="col-span-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePaymentItem(idx)}
+                              className="text-red-500 hover:text-red-700"
+                              title="Remove receipt"
+                            >
+                              <i className="ti ti-trash" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                          <input
+                            type="text"
+                            value={pm.voucherNo}
+                            onChange={(e) => handleUpdatePaymentItem(idx, 'voucherNo', e.target.value)}
+                            className="w-full border rounded px-2 py-0.5 font-mono text-[10px] text-gray-700"
+                            placeholder="VOUCHER # (e.g. RV-101)"
+                          />
+                          <input
+                            type="text"
+                            value={pm.description}
+                            onChange={(e) => handleUpdatePaymentItem(idx, 'description', e.target.value)}
+                            className="w-full border rounded px-2 py-0.5 text-[10px] text-gray-700"
+                            placeholder="REMARKS / DESCRIPTION"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2 font-mono text-xs border-t border-emerald-200">
+                    <span className="font-bold text-slate-600">NET TOTAL: {Number(invoiceData.totalAmount || 0).toLocaleString()}</span>
+                    <span className={`font-black text-sm px-2 py-0.5 rounded ${invoiceData.balanceDue > 0 ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      BALANCE DUE: {Number(invoiceData.balanceDue || 0).toLocaleString()} ({invoiceData.status})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bank Details & Remarks */}
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">BANK TRANSFER DETAILS</label>
+                    <input
+                      type="text"
+                      value={invoiceData.bankDetails}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, bankDetails: e.target.value })}
+                      className="w-full border rounded px-2 py-1 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">REMARKS / TERMS</label>
+                    <input
+                      type="text"
+                      value={invoiceData.remarks}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, remarks: e.target.value })}
+                      className="w-full border rounded px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+                {/* Right Panel: Live PDF Preview */}
+              <div className="lg:col-span-7 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center flex items-center justify-between px-2">
+                  <span>📄 Live Printable Invoice PDF Preview</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200 text-purple-900 font-bold transition-all">
+                    <input
+                      type="checkbox"
+                      checked={invoiceData.hideBreakup || false}
+                      onChange={(e) => setInvoiceData({ ...invoiceData, hideBreakup: e.target.checked })}
+                      className="w-3.5 h-3.5 text-purple-600 rounded"
+                    />
+                    <span className="text-[10px]">
+                      {invoiceData.hideBreakup ? 'Without Breakup' : 'With Breakup'}
+                    </span>
+                  </label>
+                </div>
+                <InvoicePdfTemplate
+                  invoiceNo={invoiceData.invoiceNo}
+                  invoiceDate={invoiceData.invoiceDate}
+                  dueDate={invoiceData.dueDate}
+                  clientName={invoiceData.clientName}
+                  phone={invoiceData.phone}
+                  whatsapp={invoiceData.whatsapp}
+                  email={invoiceData.email}
+                  ticketPassengers={invoiceData.ticketPassengers || []}
+                  visaPassengers={invoiceData.visaPassengers || []}
+                  hotelItems={invoiceData.hotelItems || []}
+                  transportItems={invoiceData.transportItems || []}
+                  items={invoiceData.items}
+                  payments={invoiceData.payments || []}
+                  subtotal={invoiceData.subtotal}
+                  discount={Number(invoiceData.discount || 0)}
+                  totalAmount={invoiceData.totalAmount}
+                  amountPaid={Number(invoiceData.amountPaid || 0)}
+                  balanceDue={invoiceData.balanceDue}
+                  status={invoiceData.status}
+                  paymentMethod={invoiceData.paymentMethod}
+                  bankDetails={invoiceData.bankDetails}
+                  remarks={invoiceData.remarks}
+                  hideBreakup={invoiceData.hideBreakup || false}
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="px-6 py-3 border-t border-gray-200 bg-white flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+              >
+                Close
+              </button>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => downloadPdf('printable-invoice', `Invoice_${invoiceData.invoiceNo}.pdf`)}
+                  className="px-4 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
+                >
+                  <i className="ti ti-download text-sm" /> Download Invoice PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-5 py-2 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl flex items-center gap-1.5 shadow-md transition-all"
+                >
+                  <i className="ti ti-printer text-sm" /> Print Invoice
                 </button>
               </div>
             </div>

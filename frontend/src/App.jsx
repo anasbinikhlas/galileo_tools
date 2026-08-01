@@ -6,6 +6,8 @@ import Package from './pages/Package'
 import Clients from './pages/Clients'
 import ClientList from './pages/ClientList'
 import ClientContacts from './pages/ClientContacts'
+import Invoice from './pages/Invoice'
+import CompanyDetails from './pages/CompanyDetails'
 import Login from './pages/Login'
 import RequireAuth from './components/RequireAuth'
 
@@ -27,6 +29,8 @@ export default function App() {
         <Route path="clients" element={<Clients />} />
         <Route path="client-list" element={<ClientList />} />
         <Route path="contacts" element={<ClientContacts />} />
+        <Route path="invoice" element={<Invoice />} />
+        <Route path="company-details" element={<CompanyDetails />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

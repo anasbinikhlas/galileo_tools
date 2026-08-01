@@ -630,6 +630,102 @@ export default function App() {
     toast.success('Image removed', { id: 'image-removed' })
   }
 
+  // Clipboard Paste Image Function (Desktop & Mobile)
+  const handlePasteImageFromClipboard = async (targetIndex = targetPassengerIndex) => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        toast.error('Clipboard image paste requires browser permission or Ctrl+V directly.', { id: 'paste-error' })
+        return
+      }
+      const items = await navigator.clipboard.read()
+      let imageFound = false
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'))
+        if (imageType) {
+          imageFound = true
+          const blob = await item.getType(imageType)
+          const file = new File([blob], `pasted_passport_${Date.now()}.png`, { type: imageType })
+          setActiveTab('upload')
+          setTargetPassengerIndex(targetIndex)
+          processImage(file, targetIndex)
+          toast.success(`Pasted image for Passenger #${targetIndex + 1}!`, { id: 'paste-success' })
+          return
+        }
+      }
+      if (!imageFound) {
+        toast.error('No image found in clipboard. Copy an image first!', { id: 'no-image-clipboard' })
+      }
+    } catch (err) {
+      console.warn('Clipboard read failed:', err)
+      toast.error('Could not access clipboard image. Try pressing Ctrl+V directly.', { id: 'paste-denied' })
+    }
+  }
+
+  // Clipboard Paste Text Function
+  const handlePasteTextFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        toast.error('Clipboard text reading not supported.', { id: 'paste-text-error' })
+        return
+      }
+      const text = await navigator.clipboard.readText()
+      if (text) {
+        handleInput(text)
+        toast.success('Pasted text from clipboard!', { id: 'paste-text-success' })
+      } else {
+        toast.error('Clipboard is empty.', { id: 'empty-clipboard' })
+      }
+    } catch (err) {
+      toast.error('Could not access clipboard text.', { id: 'paste-text-denied' })
+    }
+  }
+
+  // Copy Image back to Clipboard
+  const handleCopyImageToClipboard = async () => {
+    if (!previewImg) return
+    try {
+      const response = await fetch(previewImg)
+      const blob = await response.blob()
+      if (navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type || 'image/png']: blob })
+        ])
+        toast.success('Passport image copied to clipboard!', { id: 'copy-img-success' })
+      } else {
+        toast.error('Copying images is not supported in this browser.', { id: 'copy-img-unsupported' })
+      }
+    } catch (err) {
+      toast.error('Failed to copy image to clipboard.', { id: 'copy-img-failed' })
+    }
+  }
+
+  // Global Paste Handler (Ctrl+V / Cmd+V or Mobile Clipboard Paste)
+  useEffect(() => {
+    const handleGlobalPaste = (e) => {
+      const clipboardData = e.clipboardData || window.clipboardData
+      if (!clipboardData) return
+      
+      const items = clipboardData.items
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              e.preventDefault()
+              setActiveTab('upload')
+              processImage(file, targetPassengerIndex)
+              toast.success(`Pasted image from clipboard to Passenger #${targetPassengerIndex + 1}!`, { id: 'global-paste-img' })
+              return
+            }
+          }
+        }
+      }
+    }
+
+    window.addEventListener('paste', handleGlobalPaste)
+    return () => window.removeEventListener('paste', handleGlobalPaste)
+  }, [targetPassengerIndex, userApiKey])
+
   // File Upload Shortcut for Passenger Cards
   const handleCardUploadShortcut = (index) => {
     setTargetPassengerIndex(index)
@@ -763,6 +859,14 @@ export default function App() {
                 Manual Input Line
               </button>
               <button
+                onClick={() => handlePasteImageFromClipboard(targetPassengerIndex)}
+                className="flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                title="Paste passport photo directly from clipboard"
+              >
+                <i className="ti ti-clipboard-check text-sm" />
+                Paste Image
+              </button>
+              <button
                 onClick={() => { setActiveTab('upload'); fileRef.current?.click() }}
                 className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg transition-all
                   ${activeTab === 'upload'
@@ -848,7 +952,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Preview image with Delete Action */}
+          {/* Preview image with Copy & Delete Actions */}
           {previewImg && !cameraOpen && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gray-50 border border-gray-200 p-3 rounded-lg shadow-sm animate-fade-in">
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 min-w-0 w-full">
@@ -868,36 +972,55 @@ export default function App() {
                   <p className="text-gray-400 mt-0.5 truncate">Values applied to fields below</p>
                 </div>
               </div>
-              <button
-                onClick={handleRemoveImage}
-                disabled={scanning}
-                className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-gray-150 shrink-0"
-                title="Remove image"
-              >
-                <i className="ti ti-trash text-base" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                <button
+                  onClick={handleCopyImageToClipboard}
+                  className="text-indigo-600 hover:text-indigo-800 transition-colors px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 flex items-center gap-1 text-xs font-semibold"
+                  title="Copy passport image to clipboard"
+                >
+                  <i className="ti ti-copy text-sm" /> Copy Image
+                </button>
+                <button
+                  onClick={handleRemoveImage}
+                  disabled={scanning}
+                  className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-gray-150"
+                  title="Remove image"
+                >
+                  <i className="ti ti-trash text-base" />
+                </button>
+              </div>
             </div>
           )}
 
           {/* Write tab — one line input */}
           <div className="space-y-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={rawInput}
-              onChange={(e) => handleInput(e.target.value)}
-              placeholder="AIRLINE COUNTRY PASPPORT GENDER DOB EXPIRY LAST NAME/FIRST NAME"
-              className={`w-full text-sm px-3.5 py-3 border rounded-xl bg-gray-50
-                font-mono tracking-wide focus:outline-none focus:bg-white transition-all shadow-inner
-                ${rawInput
-                  ? inputComplete
-                    ? 'border-emerald-400 focus:ring-1 focus:ring-emerald-500'
-                    : 'border-amber-300 focus:ring-1 focus:ring-amber-400'
-                  : 'border-gray-200 focus:ring-1 focus:ring-indigo-500'
-                }`}
-              autoComplete="off"
-              spellCheck={false}
-            />
+            <div className="relative flex items-center">
+              <input
+                ref={inputRef}
+                type="text"
+                value={rawInput}
+                onChange={(e) => handleInput(e.target.value)}
+                placeholder="AIRLINE COUNTRY PASPPORT GENDER DOB EXPIRY LAST NAME/FIRST NAME"
+                className={`w-full text-sm pl-3.5 pr-24 py-3 border rounded-xl bg-gray-50
+                  font-mono tracking-wide focus:outline-none focus:bg-white transition-all shadow-inner
+                  ${rawInput
+                    ? inputComplete
+                      ? 'border-emerald-400 focus:ring-1 focus:ring-emerald-500'
+                      : 'border-amber-300 focus:ring-1 focus:ring-amber-400'
+                    : 'border-gray-200 focus:ring-1 focus:ring-indigo-500'
+                  }`}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                onClick={handlePasteTextFromClipboard}
+                type="button"
+                className="absolute right-2 text-xs font-semibold px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg flex items-center gap-1 transition-all"
+                title="Paste text from clipboard"
+              >
+                <i className="ti ti-clipboard text-sm" /> Paste
+              </button>
+            </div>
 
             <div className="text-[11px] text-gray-500 font-mono flex flex-wrap gap-x-3 gap-y-1 bg-gray-100 p-2.5 rounded-lg border border-gray-150">
               <span className="font-bold text-gray-600 uppercase">Input Format Guide:</span>
@@ -976,6 +1099,7 @@ export default function App() {
                 onReset={resetPax}
                 onUploadShortcut={handleCardUploadShortcut}
                 onCameraShortcut={handleCardCameraShortcut}
+                onPasteImageShortcut={(i) => handlePasteImageFromClipboard(i)}
                 ssrLine={ssrLines[idx]}
               />
             ))}
@@ -987,7 +1111,7 @@ export default function App() {
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <i className="ti ti-clipboard-text text-lg" aria-hidden="true" />
-              Galileo output lines
+              GDS output lines
             </p>
             <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${
               allComplete
@@ -1034,7 +1158,7 @@ export default function App() {
   )
 }
 
-function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShortcut, onCameraShortcut, ssrLine }) {
+function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShortcut, onCameraShortcut, onPasteImageShortcut, ssrLine }) {
   const complete = ssrLine !== null
   return (
     <div id={pax.id} className={`rounded-xl border p-4 transition-all shadow-sm ${
@@ -1058,6 +1182,15 @@ function PaxForm({ pax, index, total, onUpdate, onRemove, onReset, onUploadShort
 
         {/* Action Controls */}
         <div className="flex flex-row flex-wrap gap-1.5 text-xs font-semibold items-center">
+          <button
+            onClick={() => onPasteImageShortcut(index)}
+            className="text-emerald-700 hover:text-emerald-900 transition-colors flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1.5 rounded border border-emerald-200"
+            title="Paste passport photo from clipboard for this passenger"
+          >
+            <i className="ti ti-clipboard-check" />
+            Paste Image
+          </button>
+
           <button
             onClick={() => onCameraShortcut(index)}
             className="text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded"

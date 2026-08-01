@@ -57,7 +57,7 @@ export default function DashboardLayout() {
       )}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar
-          title="GalileoTools"
+          title="Travel Agents Suite"
           subtitle="Travel Office Suite"
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed(c => !c)}

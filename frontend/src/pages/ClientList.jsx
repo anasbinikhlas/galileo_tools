@@ -59,7 +59,7 @@ export default function ClientList() {
 
   const handleDownloadPdf = async () => {
     const elementId = showPrintModal === 'color' ? 'printable-color-package' : 'printable-package'
-    const element = document.getElementById(elementId)
+    const element = document.getElementById(elementId) || document.getElementById('printable-color-package')
     if (!element) return
 
     toast.loading('Generating client voucher PDF...', { id: 'pdf-gen' })
@@ -68,7 +68,7 @@ export default function ClientList() {
         margin: [5, 5, 5, 5],
         filename: `Client_${selectedClient?.name || 'Voucher'}_${new Date().toISOString().slice(0, 10)}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0, windowWidth: 1200 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       }
 
@@ -80,6 +80,7 @@ export default function ClientList() {
       window.print()
     }
   }
+  const handleSavePdf = handleDownloadPdf
 
   // Date parser helper for accurate sorting
   const getSortableDate = (dateStr) => {

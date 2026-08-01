@@ -239,58 +239,91 @@ function fileToBase64(file) {
   })
 }
 
-// ── NIGHTS CALCULATION HELPER FROM CHECK IN & CHECK OUT DATES ──
+// ── DATE & NIGHTS ARITHMETIC HELPERS ──
+function parseCustomDate(str) {
+  if (!str) return null
+  const s = String(str).trim()
+
+  const monthMap = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  }
+
+  // Pattern 1: DD-MM-YY or DD-MM-YYYY (e.g. "20-06-26", "30-06-2026")
+  const matchNumeric = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
+  if (matchNumeric) {
+    const day = parseInt(matchNumeric[1], 10)
+    const month = parseInt(matchNumeric[2], 10) - 1
+    let year = parseInt(matchNumeric[3], 10)
+    if (year < 100) year = 2000 + year
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      return new Date(year, month, day)
+    }
+  }
+
+  // Pattern 2: DD-MMM-YY or DD-MMM (e.g. "20-Jun-26", "20-Jun")
+  const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
+  if (matchMonthStr) {
+    const day = parseInt(matchMonthStr[1], 10)
+    const monthStr = matchMonthStr[2].toLowerCase()
+    const monthIdx = monthMap[monthStr]
+    let year = new Date().getFullYear()
+    if (matchMonthStr[4]) {
+      const yrVal = parseInt(matchMonthStr[4], 10)
+      year = yrVal < 100 ? 2000 + yrVal : yrVal
+    }
+    if (monthIdx !== undefined && !isNaN(day)) {
+      return new Date(year, monthIdx, day)
+    }
+  }
+
+  // Pattern 3: Standard Date.parse
+  const parsed = Date.parse(s)
+  if (!isNaN(parsed)) return new Date(parsed)
+
+  return null
+}
+
+function formatDateToString(dateObj, templateStr) {
+  if (!dateObj || isNaN(dateObj.getTime())) return ''
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const day = String(dateObj.getDate()).padStart(2, '0')
+  const monthIdx = dateObj.getMonth()
+  const yearFull = dateObj.getFullYear()
+  const yearShort = String(yearFull).slice(-2)
+
+  if (templateStr) {
+    const s = String(templateStr).trim()
+    if (/^\d{1,2}[-/\s.]+\d{1,2}[-/\s.]+\d{2,4}$/.test(s)) {
+      const monthNum = String(monthIdx + 1).padStart(2, '0')
+      const matchNum = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
+      if (matchNum && matchNum[3].length === 4) {
+        return `${day}-${monthNum}-${yearFull}`
+      }
+      return `${day}-${monthNum}-${yearShort}`
+    }
+    const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
+    if (matchMonthStr) {
+      const mStr = months[monthIdx]
+      if (matchMonthStr[4] && matchMonthStr[4].length === 4) {
+        return `${day}-${mStr}-${yearFull}`.toUpperCase()
+      }
+      if (matchMonthStr[4] && matchMonthStr[4].length === 2) {
+        return `${day}-${mStr}-${yearShort}`.toUpperCase()
+      }
+      return `${day}-${mStr}`.toUpperCase()
+    }
+  }
+
+  const mStr = months[monthIdx]
+  return `${day}-${mStr}-${yearShort}`.toUpperCase()
+}
+
 function calculateNightsFromDates(checkIn, checkOut) {
   if (!checkIn || !checkOut) return 0
-
   try {
-    const monthMap = {
-      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-    }
-
-    const parseCustomDate = (str) => {
-      if (!str) return null
-      const s = String(str).trim()
-
-      // Pattern 1: DD-MM-YY or DD-MM-YYYY (e.g. "20-06-26", "30-06-26", "10-07-26", "14-07-26")
-      const matchNumeric = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
-      if (matchNumeric) {
-        const day = parseInt(matchNumeric[1], 10)
-        const month = parseInt(matchNumeric[2], 10) - 1
-        let year = parseInt(matchNumeric[3], 10)
-        if (year < 100) year = 2000 + year
-        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          return new Date(year, month, day)
-        }
-      }
-
-      // Pattern 2: DD-MMM-YY or DD-MMM (e.g. "20-Jun-26", "20-Jun", "30-Jun")
-      const matchMonthStr = s.match(/^(\d{1,2})[-/\s.]+([A-Za-z]{3})([-/\s.]+(\d{2,4}))?$/i)
-      if (matchMonthStr) {
-        const day = parseInt(matchMonthStr[1], 10)
-        const monthStr = matchMonthStr[2].toLowerCase()
-        const monthIdx = monthMap[monthStr]
-        let year = new Date().getFullYear()
-        if (matchMonthStr[4]) {
-          const yrVal = parseInt(matchMonthStr[4], 10)
-          year = yrVal < 100 ? 2000 + yrVal : yrVal
-        }
-        if (monthIdx !== undefined && !isNaN(day)) {
-          return new Date(year, monthIdx, day)
-        }
-      }
-
-      // Pattern 3: Standard Date.parse
-      const parsed = Date.parse(s)
-      if (!isNaN(parsed)) return new Date(parsed)
-
-      return null
-    }
-
     const d1 = parseCustomDate(checkIn)
     const d2 = parseCustomDate(checkOut)
-
     if (d1 && d2) {
       if (d2 < d1 && d2.getMonth() < d1.getMonth()) {
         d2.setFullYear(d1.getFullYear() + 1)
@@ -302,8 +335,25 @@ function calculateNightsFromDates(checkIn, checkOut) {
   } catch (e) {
     console.error('Date parsing error:', e)
   }
-
   return 0
+}
+
+function calculateCheckoutFromCheckinAndNights(checkInStr, nights) {
+  const n = parseInt(nights, 10)
+  if (isNaN(n) || n <= 0) return ''
+  const d = parseCustomDate(checkInStr)
+  if (!d) return ''
+  d.setDate(d.getDate() + n)
+  return formatDateToString(d, checkInStr)
+}
+
+function calculateCheckinFromCheckoutAndNights(checkOutStr, nights) {
+  const n = parseInt(nights, 10)
+  if (isNaN(n) || n <= 0) return ''
+  const d = parseCustomDate(checkOutStr)
+  if (!d) return ''
+  d.setDate(d.getDate() - n)
+  return formatDateToString(d, checkOutStr)
 }
 
 export default function Package() {
@@ -372,6 +422,7 @@ export default function Package() {
   const [userApiKey, setUserApiKey] = useState(apiKey || '')
   const [showKeyInput, setShowKeyInput] = useState(!apiKey)
   const [showPrintModal, setShowPrintModal] = useState(false) // false | 'standard' | 'color'
+  const [showCompanyDetails, setShowCompanyDetails] = useState(true)
 
   const fileRef = useRef(null)
   const videoRef = useRef(null)
@@ -545,31 +596,16 @@ export default function Package() {
     const fileName = `travel-package-${srNo}.pdf`
 
     const options = {
-      margin:        5,
+      margin:        [5, 5, 5, 5],
       filename:      fileName,
       image:         { type: 'jpeg', quality: 0.98 },
-      html2canvas:   { scale: 2, useCORS: true, logging: false },
+      html2canvas:   { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0, windowWidth: 1200 },
       jsPDF:         { unit: 'mm', format: 'a4', orientation: 'portrait' }
     }
 
     try {
-      // Generate PDF blob explicitly
-      const worker = html2pdf().from(element).set(options)
-      const pdfBlob = await worker.output('blob')
-
-      // Create explicit application/pdf Blob and anchor element with filename
-      const blob = new Blob([pdfBlob], { type: 'application/pdf' })
-      const blobUrl = URL.createObjectURL(blob)
-
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-
-      // Clean up DOM and memory
-      document.body.removeChild(link)
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 3000)
+      await html2pdf().set(options).from(element).save()
+      toast.success('Package PDF saved successfully!', { id: 'pdf-gen' })
     } catch (err) {
       console.error('PDF generation error:', err)
       window.print()
@@ -998,9 +1034,16 @@ export default function Package() {
                       value={h.check_in}
                       onChange={(e) => {
                         const updated = [...makkahHotels]
-                        updated[i].check_in = e.target.value.toUpperCase()
-                        const calcN = calculateNightsFromDates(e.target.value, updated[i].check_out)
-                        if (calcN > 0) updated[i].nights = String(calcN)
+                        const val = e.target.value.toUpperCase()
+                        updated[i].check_in = val
+                        updated[i].last_edited = 'check_in'
+                        if (updated[i].nights && Number(updated[i].nights) > 0) {
+                          const calcOut = calculateCheckoutFromCheckinAndNights(val, updated[i].nights)
+                          if (calcOut) updated[i].check_out = calcOut
+                        } else if (updated[i].check_out) {
+                          const calcN = calculateNightsFromDates(val, updated[i].check_out)
+                          if (calcN > 0) updated[i].nights = String(calcN)
+                        }
                         setMakkahHotels(updated)
                       }}
                       placeholder="CHECK IN"
@@ -1015,9 +1058,16 @@ export default function Package() {
                       onChange={(e) => {
                         if (e.target.value) {
                           const updated = [...makkahHotels]
-                          updated[i].check_in = formatDateFromPicker(e.target.value).toUpperCase()
-                          const calcN = calculateNightsFromDates(updated[i].check_in, updated[i].check_out)
-                          if (calcN > 0) updated[i].nights = String(calcN)
+                          const val = formatDateFromPicker(e.target.value).toUpperCase()
+                          updated[i].check_in = val
+                          updated[i].last_edited = 'check_in'
+                          if (updated[i].nights && Number(updated[i].nights) > 0) {
+                            const calcOut = calculateCheckoutFromCheckinAndNights(val, updated[i].nights)
+                            if (calcOut) updated[i].check_out = calcOut
+                          } else if (updated[i].check_out) {
+                            const calcN = calculateNightsFromDates(val, updated[i].check_out)
+                            if (calcN > 0) updated[i].nights = String(calcN)
+                          }
                           setMakkahHotels(updated)
                         }
                       }}
@@ -1032,9 +1082,16 @@ export default function Package() {
                       value={h.check_out}
                       onChange={(e) => {
                         const updated = [...makkahHotels]
-                        updated[i].check_out = e.target.value.toUpperCase()
-                        const calcN = calculateNightsFromDates(updated[i].check_in, e.target.value)
-                        if (calcN > 0) updated[i].nights = String(calcN)
+                        const val = e.target.value.toUpperCase()
+                        updated[i].check_out = val
+                        updated[i].last_edited = 'check_out'
+                        if (updated[i].nights && Number(updated[i].nights) > 0) {
+                          const calcIn = calculateCheckinFromCheckoutAndNights(val, updated[i].nights)
+                          if (calcIn) updated[i].check_in = calcIn
+                        } else if (updated[i].check_in) {
+                          const calcN = calculateNightsFromDates(updated[i].check_in, val)
+                          if (calcN > 0) updated[i].nights = String(calcN)
+                        }
                         setMakkahHotels(updated)
                       }}
                       placeholder="CHECK OUT"
@@ -1049,9 +1106,16 @@ export default function Package() {
                       onChange={(e) => {
                         if (e.target.value) {
                           const updated = [...makkahHotels]
-                          updated[i].check_out = formatDateFromPicker(e.target.value).toUpperCase()
-                          const calcN = calculateNightsFromDates(updated[i].check_in, updated[i].check_out)
-                          if (calcN > 0) updated[i].nights = String(calcN)
+                          const val = formatDateFromPicker(e.target.value).toUpperCase()
+                          updated[i].check_out = val
+                          updated[i].last_edited = 'check_out'
+                          if (updated[i].nights && Number(updated[i].nights) > 0) {
+                            const calcIn = calculateCheckinFromCheckoutAndNights(val, updated[i].nights)
+                            if (calcIn) updated[i].check_in = calcIn
+                          } else if (updated[i].check_in) {
+                            const calcN = calculateNightsFromDates(updated[i].check_in, val)
+                            if (calcN > 0) updated[i].nights = String(calcN)
+                          }
                           setMakkahHotels(updated)
                         }
                       }}
@@ -1066,7 +1130,18 @@ export default function Package() {
                     value={h.nights}
                     onChange={(e) => {
                       const updated = [...makkahHotels]
-                      updated[i].nights = e.target.value
+                      const nVal = e.target.value
+                      updated[i].nights = nVal
+                      if (updated[i].last_edited === 'check_out' && updated[i].check_out) {
+                        const calcIn = calculateCheckinFromCheckoutAndNights(updated[i].check_out, nVal)
+                        if (calcIn) updated[i].check_in = calcIn
+                      } else if (updated[i].check_in) {
+                        const calcOut = calculateCheckoutFromCheckinAndNights(updated[i].check_in, nVal)
+                        if (calcOut) updated[i].check_out = calcOut
+                      } else if (updated[i].check_out) {
+                        const calcIn = calculateCheckinFromCheckoutAndNights(updated[i].check_out, nVal)
+                        if (calcIn) updated[i].check_in = calcIn
+                      }
                       setMakkahHotels(updated)
                     }}
                     placeholder="NIGHTS"
@@ -1163,9 +1238,16 @@ export default function Package() {
                       value={h.check_in}
                       onChange={(e) => {
                         const updated = [...madinaHotels]
-                        updated[i].check_in = e.target.value.toUpperCase()
-                        const calcN = calculateNightsFromDates(e.target.value, updated[i].check_out)
-                        if (calcN > 0) updated[i].nights = String(calcN)
+                        const val = e.target.value.toUpperCase()
+                        updated[i].check_in = val
+                        updated[i].last_edited = 'check_in'
+                        if (updated[i].nights && Number(updated[i].nights) > 0) {
+                          const calcOut = calculateCheckoutFromCheckinAndNights(val, updated[i].nights)
+                          if (calcOut) updated[i].check_out = calcOut
+                        } else if (updated[i].check_out) {
+                          const calcN = calculateNightsFromDates(val, updated[i].check_out)
+                          if (calcN > 0) updated[i].nights = String(calcN)
+                        }
                         setMadinaHotels(updated)
                       }}
                       placeholder="CHECK IN"
@@ -1180,9 +1262,16 @@ export default function Package() {
                       onChange={(e) => {
                         if (e.target.value) {
                           const updated = [...madinaHotels]
-                          updated[i].check_in = formatDateFromPicker(e.target.value).toUpperCase()
-                          const calcN = calculateNightsFromDates(updated[i].check_in, updated[i].check_out)
-                          if (calcN > 0) updated[i].nights = String(calcN)
+                          const val = formatDateFromPicker(e.target.value).toUpperCase()
+                          updated[i].check_in = val
+                          updated[i].last_edited = 'check_in'
+                          if (updated[i].nights && Number(updated[i].nights) > 0) {
+                            const calcOut = calculateCheckoutFromCheckinAndNights(val, updated[i].nights)
+                            if (calcOut) updated[i].check_out = calcOut
+                          } else if (updated[i].check_out) {
+                            const calcN = calculateNightsFromDates(val, updated[i].check_out)
+                            if (calcN > 0) updated[i].nights = String(calcN)
+                          }
                           setMadinaHotels(updated)
                         }
                       }}
@@ -1197,9 +1286,16 @@ export default function Package() {
                       value={h.check_out}
                       onChange={(e) => {
                         const updated = [...madinaHotels]
-                        updated[i].check_out = e.target.value.toUpperCase()
-                        const calcN = calculateNightsFromDates(updated[i].check_in, e.target.value)
-                        if (calcN > 0) updated[i].nights = String(calcN)
+                        const val = e.target.value.toUpperCase()
+                        updated[i].check_out = val
+                        updated[i].last_edited = 'check_out'
+                        if (updated[i].nights && Number(updated[i].nights) > 0) {
+                          const calcIn = calculateCheckinFromCheckoutAndNights(val, updated[i].nights)
+                          if (calcIn) updated[i].check_in = calcIn
+                        } else if (updated[i].check_in) {
+                          const calcN = calculateNightsFromDates(updated[i].check_in, val)
+                          if (calcN > 0) updated[i].nights = String(calcN)
+                        }
                         setMadinaHotels(updated)
                       }}
                       placeholder="CHECK OUT"
@@ -1214,9 +1310,16 @@ export default function Package() {
                       onChange={(e) => {
                         if (e.target.value) {
                           const updated = [...madinaHotels]
-                          updated[i].check_out = formatDateFromPicker(e.target.value).toUpperCase()
-                          const calcN = calculateNightsFromDates(updated[i].check_in, updated[i].check_out)
-                          if (calcN > 0) updated[i].nights = String(calcN)
+                          const val = formatDateFromPicker(e.target.value).toUpperCase()
+                          updated[i].check_out = val
+                          updated[i].last_edited = 'check_out'
+                          if (updated[i].nights && Number(updated[i].nights) > 0) {
+                            const calcIn = calculateCheckinFromCheckoutAndNights(val, updated[i].nights)
+                            if (calcIn) updated[i].check_in = calcIn
+                          } else if (updated[i].check_in) {
+                            const calcN = calculateNightsFromDates(updated[i].check_in, val)
+                            if (calcN > 0) updated[i].nights = String(calcN)
+                          }
                           setMadinaHotels(updated)
                         }
                       }}
@@ -1231,7 +1334,18 @@ export default function Package() {
                     value={h.nights}
                     onChange={(e) => {
                       const updated = [...madinaHotels]
-                      updated[i].nights = e.target.value
+                      const nVal = e.target.value
+                      updated[i].nights = nVal
+                      if (updated[i].last_edited === 'check_out' && updated[i].check_out) {
+                        const calcIn = calculateCheckinFromCheckoutAndNights(updated[i].check_out, nVal)
+                        if (calcIn) updated[i].check_in = calcIn
+                      } else if (updated[i].check_in) {
+                        const calcOut = calculateCheckoutFromCheckinAndNights(updated[i].check_in, nVal)
+                        if (calcOut) updated[i].check_out = calcOut
+                      } else if (updated[i].check_out) {
+                        const calcIn = calculateCheckinFromCheckoutAndNights(updated[i].check_out, nVal)
+                        if (calcIn) updated[i].check_in = calcIn
+                      }
                       setMadinaHotels(updated)
                     }}
                     placeholder="NIGHTS"
@@ -1429,11 +1543,21 @@ export default function Package() {
                 <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-200 transition-all select-none">
                   <input
                     type="checkbox"
+                    checked={showCompanyDetails}
+                    onChange={(e) => setShowCompanyDetails(e.target.checked)}
+                    className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                  />
+                  <i className="ti ti-building text-emerald-600" />
+                  <span>Company Details (Logo & Address)</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-200 transition-all select-none">
+                  <input
+                    type="checkbox"
                     checked={hidePdfBreakup}
                     onChange={(e) => setHidePdfBreakup(e.target.checked)}
                     className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
                   />
-                  <span>Hide Item Breakup Amounts in PDF</span>
+                  <span>Hide Item Breakup</span>
                 </label>
                 <button
                   onClick={handleSavePdf}
@@ -1475,6 +1599,7 @@ export default function Package() {
                   totals={totals}
                   comments={comments}
                   hideBreakup={hidePdfBreakup}
+                  showCompanyDetails={showCompanyDetails}
                 />
               ) : (
                 <StandardPdfTemplate 
@@ -1491,6 +1616,7 @@ export default function Package() {
                   totals={totals}
                   comments={comments}
                   hideBreakup={hidePdfBreakup}
+                  showCompanyDetails={showCompanyDetails}
                 />
               )}
             </div>

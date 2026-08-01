@@ -1,65 +1,86 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 
-const tools = [
+const navSections = [
   {
-    path: '/',
-    icon: 'ti-layout-dashboard',
-    label: 'Dashboard',
-    ready: true,
+    title: null,
+    items: [
+      {
+        path: '/',
+        icon: 'ti-layout-dashboard',
+        label: 'Dashboard',
+        ready: true,
+      },
+    ]
   },
   {
-    path: '/ssr-docs',
-    icon: 'ti-passport',
-    label: 'SSR Docs',
-    ready: true,
+    title: 'Umrah Operations',
+    items: [
+      {
+        path: '/clients',
+        icon: 'ti-users',
+        label: 'Clients',
+        ready: true,
+      },
+      {
+        path: '/client-list',
+        icon: 'ti-list-details',
+        label: 'Clients List',
+        ready: true,
+      },
+      {
+        path: '/contacts',
+        icon: 'ti-address-book',
+        label: 'Clients Contact',
+        ready: true,
+      },
+    ]
   },
   {
-    path: '/package',
-    icon: 'ti-package',
-    label: 'Package',
-    ready: true,
-  },
-  {
-    path: '/clients',
-    icon: 'ti-users',
-    label: 'Clients',
-    ready: true,
-  },
-  {
-    path: '/client-list',
-    icon: 'ti-list-details',
-    label: 'Client List',
-    ready: true,
-  },
-  {
-    path: '/contacts',
-    icon: 'ti-address-book',
-    label: 'Client Contacts',
-    ready: true,
-  },
-  {
-    path: '/invoice',
-    icon: 'ti-file-invoice',
-    label: 'Invoice',
-    ready: false,
-  },
-  {
-    path: '/fare-calc',
-    icon: 'ti-calculator',
-    label: 'Fare Calc',
-    ready: false,
-  },
-  {
-    path: '/customers',
-    icon: 'ti-users-group',
-    label: 'Customers',
-    ready: false,
-  },
+    title: 'Tools & GDS',
+    items: [
+      {
+        path: '/ssr-docs',
+        icon: 'ti-id-badge-2',
+        label: 'SSR Docs',
+        ready: true,
+      },
+      {
+        path: '/package',
+        icon: 'ti-package',
+        label: 'Package Generator',
+        ready: true,
+      },
+      {
+        path: '/invoice',
+        icon: 'ti-file-invoice',
+        label: 'Invoice',
+        ready: true,
+      },
+      {
+        path: '/company-details',
+        icon: 'ti-building',
+        label: 'Company Details',
+        ready: true,
+      },
+      {
+        path: '/fare-calc',
+        icon: 'ti-calculator',
+        label: 'Fare Calc',
+        ready: false,
+      },
+      {
+        path: '/customers',
+        icon: 'ti-users-group',
+        label: 'Customers',
+        ready: false,
+      },
+    ]
+  }
 ]
 
 export default function Sidebar({ isOpen = false, onClose, collapsed = false, onToggleCollapse, onLogout }) {
   return (
-    <aside className={`fixed inset-y-0 left-0 z-40 w-64 ${collapsed ? 'md:w-16' : 'md:w-52'} transform bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-200 ease-in-out shadow-xl md:static md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+    <aside className={`fixed inset-y-0 left-0 z-40 w-64 ${collapsed ? 'md:w-16' : 'md:w-56'} transform bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-200 ease-in-out shadow-xl md:static md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
 
       {onClose && (
         <button
@@ -75,12 +96,12 @@ export default function Sidebar({ isOpen = false, onClose, collapsed = false, on
       {/* Logo */}
       <div className="px-3 py-3 border-b border-gray-100 flex items-center gap-2">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center shadow-sm">
             <i className="ti ti-plane-tilt text-white" style={{ fontSize: 14 }} />
           </div>
           <div className={`${collapsed ? 'inline md:hidden' : 'block'}`}>
-            <p className="text-sm font-semibold text-gray-900 leading-none">GalileoTools</p>
-            <p className="text-xs text-gray-400 mt-0.5">Travel Office Suite</p>
+            <p className="text-sm font-bold text-gray-900 leading-none">Travel Agents Suite</p>
+            <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Umrah & Travel Suite</p>
           </div>
         </div>
         <div className="ml-auto hidden md:flex items-center gap-2">
@@ -88,7 +109,7 @@ export default function Sidebar({ isOpen = false, onClose, collapsed = false, on
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
               title={collapsed ? 'Expand' : 'Collapse'}
             >
               <i className={`ti ${collapsed ? 'ti-chevron-right' : 'ti-chevron-left'}`} />
@@ -98,41 +119,48 @@ export default function Sidebar({ isOpen = false, onClose, collapsed = false, on
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 pt-3 pb-3">
-        <p className="px-4 text-xs text-gray-400 uppercase tracking-widest mb-2">Tools</p>
-
-        {tools.map((t) =>
-          t.ready ? (
-            <NavLink
-              key={t.path}
-              to={t.path}
-              onClick={() => { if (onClose && window.innerWidth < 768) onClose() }}
-              className={({ isActive }) =>
-                'sidebar-item ' + (isActive ? 'active' : '')
-              }
-            >
-              <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
-              <span className={`${collapsed ? 'inline md:hidden' : 'inline'}`}>{t.label}</span>
-            </NavLink>
-          ) : (
-            <div key={t.path} className="sidebar-item opacity-40 cursor-not-allowed select-none">
-              <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
-              <span className={`${collapsed ? 'inline md:hidden' : 'inline'}`}>{t.label}</span>
-              <span className={`ml-auto text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ${collapsed ? 'inline md:hidden' : ''}`}>
-                Soon
-              </span>
-            </div>
-          )
-        )}
+      <nav className="flex-1 pt-3 pb-3 overflow-y-auto space-y-4">
+        {navSections.map((sec, secIdx) => (
+          <div key={secIdx} className="space-y-1">
+            {sec.title && (
+              <p className={`px-4 text-[10px] font-extrabold uppercase tracking-widest text-emerald-800/80 mb-1 ${collapsed ? 'hidden md:hidden' : 'block'}`}>
+                {sec.title}
+              </p>
+            )}
+            {sec.items.map((t) =>
+              t.ready ? (
+                <NavLink
+                  key={t.path}
+                  to={t.path}
+                  onClick={() => { if (onClose && window.innerWidth < 768) onClose() }}
+                  className={({ isActive }) =>
+                    'sidebar-item ' + (isActive ? 'active' : '')
+                  }
+                >
+                  <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
+                  <span className={`${collapsed ? 'inline md:hidden' : 'inline'}`}>{t.label}</span>
+                </NavLink>
+              ) : (
+                <div key={t.path} className="sidebar-item opacity-40 cursor-not-allowed select-none">
+                  <i className={`ti ${t.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />
+                  <span className={`${collapsed ? 'inline md:hidden' : 'inline'}`}>{t.label}</span>
+                  <span className={`ml-auto text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-semibold ${collapsed ? 'inline md:hidden' : ''}`}>
+                    Soon
+                  </span>
+                </div>
+              )
+            )}
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-gray-100 flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-brand-50 flex items-center justify-center">
-            <i className="ti ti-building text-brand-600" style={{ fontSize: 12 }} aria-hidden="true" />
+          <div className="w-6 h-6 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+            <i className="ti ti-building text-emerald-700" style={{ fontSize: 12 }} aria-hidden="true" />
           </div>
-          <span className={`${collapsed ? 'inline md:hidden' : 'text-xs text-gray-500'}`}>Your Agency</span>
+          <span className={`${collapsed ? 'inline md:hidden' : 'text-xs font-semibold text-gray-700'}`}>Your Agency</span>
         </div>
         {onLogout && (
           <button
