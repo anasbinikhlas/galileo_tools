@@ -519,29 +519,6 @@ export default function Clients() {
   const [ticketMode, setTicketMode] = useState('grouped') // 'grouped' or 'separate'
   const [customPnr, setCustomPnr] = useState('')
 
-  // PDF Download Helper
-  const downloadPdf = (elementId, filename) => {
-    const element = document.getElementById(elementId)
-    if (!element) {
-      toast.error('Element for PDF export not found.')
-      return
-    }
-    toast.loading('Generating PDF document...', { id: 'pdf-gen' })
-    const opt = {
-      margin: [4, 4, 4, 4],
-      filename: filename || 'Document.pdf',
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    }
-    html2pdf().set(opt).from(element).save().then(() => {
-      toast.success('PDF document downloaded successfully!', { id: 'pdf-gen' })
-    }).catch(err => {
-      console.error('PDF error:', err)
-      toast.error('Failed to generate PDF document.', { id: 'pdf-gen' })
-    })
-  }
-
   const handleParseTerminalText = () => {
     if (!terminalInputText || !terminalInputText.trim()) {
       toast.error('Please paste GDS terminal text first')
