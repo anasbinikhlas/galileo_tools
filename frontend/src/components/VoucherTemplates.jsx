@@ -1232,11 +1232,13 @@ export function HotelVoucherPdfTemplate({
   madinaHotels = [],
   hcnMakkah = '',
   hcnMadina = '',
+  voucherNo = '',
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
   const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
   const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `HV-${header.sr_no}` : 'HV-1001')).toUpperCase()
 
   const mList = Array.isArray(makkahHotels) && makkahHotels.length > 0
     ? makkahHotels
@@ -1293,7 +1295,7 @@ export function HotelVoucherPdfTemplate({
           </div>
           <div>
             <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
-            <span className="font-bold text-slate-900">HV-{Date.now().toString().slice(-6)}</span>
+            <span className="font-bold text-slate-900">{safeVoucherNo}</span>
           </div>
           <div>
             <span className="text-[9px] font-bold text-slate-500 block">TOTAL PAX</span>
@@ -1407,11 +1409,13 @@ export function TransportVoucherPdfTemplate({
   paxSummary = {},
   transportRows = [],
   driverContact = '',
+  voucherNo = '',
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
   const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
   const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `TV-${header.sr_no}` : 'TV-1001')).toUpperCase()
 
   const tList = Array.isArray(transportRows) && transportRows.length > 0
     ? transportRows
@@ -1464,7 +1468,7 @@ export function TransportVoucherPdfTemplate({
           </div>
           <div>
             <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
-            <span className="font-bold text-slate-900">TV-{Date.now().toString().slice(-6)}</span>
+            <span className="font-bold text-slate-900">{safeVoucherNo}</span>
           </div>
           <div>
             <span className="text-[9px] font-bold text-slate-500 block">PASSENGER COUNT</span>
