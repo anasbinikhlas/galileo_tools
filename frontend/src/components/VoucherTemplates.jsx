@@ -1020,7 +1020,8 @@ export function ETicketPdfTemplate({
   const company = companyDetails || getActiveCompanyDetails()
   const safeHeaderName = String(header?.name || 'PASSENGER / CLIENT')
   const safeHeaderDate = String(header?.date || new Date().toISOString().slice(0, 10))
-  const safePnr = String(pnr || header?.sr_no || 'PNR-CONFIRMED').toUpperCase()
+  const pnrFromFlight = Array.isArray(flightItinerary) ? flightItinerary.find(f => f?.pnr)?.pnr : ''
+  const safePnr = String(pnr || header?.pnr || pnrFromFlight || 'PNR-CONFIRMED').toUpperCase()
 
   // Format flight list
   const flights = Array.isArray(flightItinerary) && flightItinerary.length > 0
@@ -1536,6 +1537,7 @@ export function AllInOnePdfTemplate({
   totalPax = 0,
   flightItinerary = [],
   passengerList = [],
+  pnr = '',
   makkahHotels = [],
   madinaHotels = [],
   transportRows = [],
@@ -1559,6 +1561,7 @@ export function AllInOnePdfTemplate({
           totalPax={totalPax}
           flightItinerary={flightItinerary}
           passengerList={passengerList}
+          pnr={pnr}
           mode="grouped"
         />
       </div>

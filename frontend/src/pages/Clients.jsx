@@ -3602,6 +3602,7 @@ export default function Clients() {
                   totalPax={totalPax}
                   flightItinerary={flightItinerary}
                   passengerList={passengerList}
+                  pnr={customPnr}
                   makkahHotels={makkahHotels}
                   madinaHotels={madinaHotels}
                   transportRows={transportRows}
