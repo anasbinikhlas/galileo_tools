@@ -1561,10 +1561,6 @@ export default function Clients() {
       setEditingId(clientRecord.id)
       toast.success(`Client "${header.name}" saved with status: ${status}`, { id: 'save-success' })
     }
-
-    setTimeout(() => {
-      navigate('/client-list')
-    }, 600)
   }
 
   // PDF Export
