@@ -300,9 +300,9 @@ function parseGalileoTerminalText(rawText) {
   const passengers = []
   const flights = []
 
-  // Passenger regex matching any occurrence of number.number SURNAME/GIVEN TITLE
-  // Example: 1.1SHAMEEM/MEHNAZ MRS, 2.1HUSSAIN/SALAAR MR, 3.1HUSSAIN/SULEMAN MR, 4.1HUSSAIN/BISMA ADNAN MRS
-  const paxRegex = /\b\d+(?:\.\d+)?\s*([A-Z]+)\/([A-Z\s]+?)(?=\s+(?:MR|MRS|MS|MISS|MSTR|INF|\d+\.|$))/gi
+  // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE
+  // Matches: 1.1SURNAME/GIVEN, 1.SURNAME/GIVEN, 1 SURNAME/GIVEN
+  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z\s()\*\.-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
 
   for (const line of lines) {
     // 1. Scan line for passenger tokens (multi-passenger line support)
@@ -311,8 +311,8 @@ function parseGalileoTerminalText(rawText) {
     while ((paxMatch = linePaxRegex.exec(line)) !== null) {
       const surname = paxMatch[1].toUpperCase()
       let given = paxMatch[2].trim().toUpperCase()
-      // Remove trailing title MR/MRS/etc if attached
-      given = given.replace(/\s+(MR|MRS|MS|MISS|MSTR|INF)$/i, '').trim()
+      // Remove trailing GDS titles & types if attached
+      given = given.replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '').trim()
       const formattedName = `${given} ${surname}`.trim()
       if (formattedName && !passengers.includes(formattedName)) {
         passengers.push(formattedName)
@@ -321,11 +321,11 @@ function parseGalileoTerminalText(rawText) {
 
     // Fallback single line passenger match
     if (passengers.length === 0) {
-      const singlePaxMatch = line.match(/^\d+(?:\.\d+)?\s*([A-Z]+)\/([A-Z\s]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF))?$/i)
+      const singlePaxMatch = line.match(/^\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z\s()\*\.-]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER))?$/i)
       if (singlePaxMatch) {
         const surname = singlePaxMatch[1].toUpperCase()
         let given = singlePaxMatch[2].trim().toUpperCase()
-        given = given.replace(/\s+(MR|MRS|MS|MISS|MSTR|INF)$/i, '').trim()
+        given = given.replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '').trim()
         const formattedName = `${given} ${surname}`.trim()
         if (formattedName && !passengers.includes(formattedName)) {
           passengers.push(formattedName)
