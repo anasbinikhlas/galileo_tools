@@ -300,9 +300,13 @@ function parseGalileoTerminalText(rawText) {
   const passengers = []
   const flights = []
 
-  // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE
-  // Matches: 1.1SURNAME/GIVEN, 1.SURNAME/GIVEN, 1 SURNAME/GIVEN
-  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z\s()\*\.-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
+  let adtCount = 0
+  let childCount = 0
+  let infantCount = 0
+
+  // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE & GDS MODIFIERS
+  // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 4.1SURNAME/GIVEN*P-I01
+  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
 
   for (const line of lines) {
     // 1. Scan line for passenger tokens (multi-passenger line support)
@@ -310,25 +314,82 @@ function parseGalileoTerminalText(rawText) {
     const linePaxRegex = new RegExp(paxRegex)
     while ((paxMatch = linePaxRegex.exec(line)) !== null) {
       const surname = paxMatch[1].toUpperCase()
-      let given = paxMatch[2].trim().toUpperCase()
-      // Remove trailing GDS titles & types if attached
-      given = given.replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '').trim()
-      const formattedName = `${given} ${surname}`.trim()
-      if (formattedName && !passengers.includes(formattedName)) {
-        passengers.push(formattedName)
+      const rawGivenAndMods = paxMatch[2].trim().toUpperCase()
+
+      let isChild = false
+      let isInfant = false
+      let infantName = ''
+
+      // Check for Child tags: *P-C05, *C05, (CHD), *CHD, etc.
+      if (/(\*P-C|\*C\d|\(CHD\)|\(C\d|CHD)/i.test(rawGivenAndMods)) {
+        isChild = true
+      }
+
+      // Check for Infant tags: *P-I01, *I01, (INF), *INF, INF
+      if (/(\*P-I|\*I\d|\(INF\)|INF)/i.test(rawGivenAndMods)) {
+        isInfant = true
+        const infNameMatch = rawGivenAndMods.match(/(?:\*P-I|\*I|\(INF\)|INF)[0-9]*[/\s]+(?:[A-Z]+\/)?([A-Z\s]+)/i)
+        if (infNameMatch && infNameMatch[1]) {
+          const rawInf = infNameMatch[1].trim()
+          infantName = `${rawInf} ${surname}`.trim()
+        }
+      }
+
+      // Clean given name by stripping GDS modifiers (*P-C05, *P-I01..., MR, MRS, etc.)
+      let cleanGiven = rawGivenAndMods
+        .replace(/\*P-[A-Z0-9]+(\/[A-Z0-9/]+)?/gi, '')
+        .replace(/\*[A-Z0-9]+/gi, '')
+        .replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '')
+        .trim()
+
+      const formattedName = `${cleanGiven} ${surname}`.trim()
+
+      if (isChild) {
+        childCount++
+        if (formattedName && !passengers.includes(formattedName)) {
+          passengers.push(formattedName)
+        }
+      } else if (isInfant && !rawGivenAndMods.includes('*P-I') && !rawGivenAndMods.includes('*I') && !rawGivenAndMods.includes('(INF)')) {
+        // Standalone infant line
+        infantCount++
+        if (formattedName && !passengers.includes(formattedName)) {
+          passengers.push(formattedName)
+        }
+      } else if (isInfant) {
+        // Adult with attached Infant
+        adtCount++
+        if (formattedName && !passengers.includes(formattedName)) {
+          passengers.push(formattedName)
+        }
+        infantCount++
+        const infPaxName = infantName || `${cleanGiven} (INFANT) ${surname}`.trim()
+        if (infPaxName && !passengers.includes(infPaxName)) {
+          passengers.push(infPaxName)
+        }
+      } else {
+        // Normal Adult passenger
+        adtCount++
+        if (formattedName && !passengers.includes(formattedName)) {
+          passengers.push(formattedName)
+        }
       }
     }
 
     // Fallback single line passenger match
     if (passengers.length === 0) {
-      const singlePaxMatch = line.match(/^\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z\s()\*\.-]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER))?$/i)
+      const singlePaxMatch = line.match(/^\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER))?$/i)
       if (singlePaxMatch) {
         const surname = singlePaxMatch[1].toUpperCase()
-        let given = singlePaxMatch[2].trim().toUpperCase()
-        given = given.replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '').trim()
-        const formattedName = `${given} ${surname}`.trim()
+        let cleanGiven = singlePaxMatch[2].trim().toUpperCase()
+        cleanGiven = cleanGiven
+          .replace(/\*P-[A-Z0-9]+(\/[A-Z0-9/]+)?/gi, '')
+          .replace(/\*[A-Z0-9]+/gi, '')
+          .replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '')
+          .trim()
+        const formattedName = `${cleanGiven} ${surname}`.trim()
         if (formattedName && !passengers.includes(formattedName)) {
           passengers.push(formattedName)
+          adtCount++
         }
       }
     }
@@ -365,7 +426,7 @@ function parseGalileoTerminalText(rawText) {
   }
 
   if (name || passengers.length > 0 || flights.length > 0) {
-    return { name, passengers, flights }
+    return { name, passengers, flights, adtCount, childCount, infantCount }
   }
   return null
 }
@@ -536,7 +597,12 @@ export default function Clients() {
 
     if (Array.isArray(result.passengers) && result.passengers.length > 0) {
       setPassengerList(result.passengers)
-      setPax(p => ({ ...p, adt: String(result.passengers.length) }))
+      setPax(p => ({
+        ...p,
+        adt: result.adtCount > 0 ? String(result.adtCount) : String(result.passengers.length),
+        child: result.childCount > 0 ? String(result.childCount) : '',
+        infant: result.infantCount > 0 ? String(result.infantCount) : ''
+      }))
     }
 
     if (Array.isArray(result.flights) && result.flights.length > 0) {
