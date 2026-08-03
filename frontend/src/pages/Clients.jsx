@@ -595,6 +595,7 @@ export default function Clients() {
   const [driverContact, setDriverContact] = useState('')
   const [ticketMode, setTicketMode] = useState('grouped') // 'grouped' or 'separate'
   const [customPnr, setCustomPnr] = useState('')
+  const [customIssueDate, setCustomIssueDate] = useState('')
 
   const handleParseTerminalText = () => {
     if (!terminalInputText || !terminalInputText.trim()) {
@@ -3647,6 +3648,17 @@ export default function Clients() {
                 </>
               )}
 
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">ISSUE DATE</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 05 MAR 2026"
+                  value={customIssueDate}
+                  onChange={(e) => setCustomIssueDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold font-mono bg-white uppercase text-slate-900"
+                />
+              </div>
+
               {(showDocModal === 'hotel' || showDocModal === 'allinone') && (
                 <>
                   <div>
@@ -3696,6 +3708,7 @@ export default function Clients() {
                   flightItinerary={flightItinerary}
                   passengerList={passengerList}
                   pnr={customPnr}
+                  issueDate={customIssueDate}
                   mode={ticketMode}
                 />
               )}
@@ -3708,6 +3721,7 @@ export default function Clients() {
                   madinaHotels={madinaHotels}
                   hcnMakkah={hcnMakkah}
                   hcnMadina={hcnMadina}
+                  issueDate={customIssueDate}
                   comments={comments}
                 />
               )}
@@ -3718,6 +3732,7 @@ export default function Clients() {
                   paxSummary={pax}
                   transportRows={transportRows}
                   driverContact={driverContact}
+                  issueDate={customIssueDate}
                   comments={comments}
                 />
               )}
@@ -3735,6 +3750,7 @@ export default function Clients() {
                   hcnMakkah={hcnMakkah}
                   hcnMadina={hcnMadina}
                   driverContact={driverContact}
+                  issueDate={customIssueDate}
                   comments={comments}
                 />
               )}

@@ -1015,11 +1015,12 @@ export function ETicketPdfTemplate({
   flightItinerary = [],
   passengerList = [],
   pnr = '',
+  issueDate = '',
   mode = 'grouped' // 'grouped' or 'separate'
 }) {
   const company = companyDetails || getActiveCompanyDetails()
   const safeHeaderName = String(header?.name || 'PASSENGER / CLIENT')
-  const safeHeaderDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safeHeaderDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
   const pnrFromFlight = Array.isArray(flightItinerary) ? flightItinerary.find(f => f?.pnr)?.pnr : ''
   const safePnr = String(pnr || header?.pnr || pnrFromFlight || 'PNR-CONFIRMED').toUpperCase()
 
@@ -1061,27 +1062,24 @@ export function ETicketPdfTemplate({
       }
     }
 
-    if (typeof p === 'string') {
-      return { 
-        name: pName, 
-        passport_no: 'A' + (1029384 + idx), 
-        ticket_no: '176-5580-274-' + (600 + idx), 
-        gender: 'M/F', 
-        type: pType 
-      }
-    }
+    const pPort = typeof p === 'object' && p !== null ? (p.passport_no || p.passportNo || '') : ''
+    const tNo = typeof p === 'object' && p !== null ? (p.ticket_no || p.ticketNo || '') : ''
+
     return {
       name: pName,
-      passport_no: p.passport_no || p.passportNo || ('P' + (100000 + idx)),
-      ticket_no: p.ticket_no || p.ticketNo || ('176-5580-274-' + (600 + idx)),
-      gender: p.gender || 'M/F',
-      type: p.type || pType
+      passport_no: pPort,
+      ticket_no: tNo,
+      gender: typeof p === 'object' && p !== null ? (p.gender || 'M/F') : 'M/F',
+      type: pType
     }
   })
 
+  const hasAnyPassport = formattedPassengers.some(p => p.passport_no && p.passport_no.trim() !== '')
+  const hasAnyTicket = formattedPassengers.some(p => p.ticket_no && p.ticket_no.trim() !== '')
+
   const renderSingleTicket = (singlePax = null, ticketIndex = 0, isPageBreak = false) => {
     const activePaxName = singlePax ? (singlePax.name || singlePax) : safeHeaderName
-    const activeTicketNo = singlePax?.ticket_no || ('176-5580-274-' + (600 + ticketIndex))
+    const activeTicketNo = (singlePax?.ticket_no || singlePax?.ticketNo || header?.ticket_no || '').trim()
 
     return (
       <div 
@@ -1130,7 +1128,7 @@ export function ETicketPdfTemplate({
         </div>
 
         {/* Booking Reference & Lead Guest Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono">
+        <div className={`grid grid-cols-2 ${activeTicketNo ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono`}>
           <div>
             <span className="text-[9px] font-bold text-slate-400 block">BOOKING REF / PNR</span>
             <span className="font-black text-indigo-900 text-sm">{safePnr}</span>
@@ -1139,10 +1137,12 @@ export function ETicketPdfTemplate({
             <span className="text-[9px] font-bold text-slate-400 block">PASSENGER NAME</span>
             <span className="font-bold text-slate-900">{activePaxName}</span>
           </div>
-          <div>
-            <span className="text-[9px] font-bold text-slate-400 block">TICKET NUMBER</span>
-            <span className="font-bold text-slate-800">{activeTicketNo}</span>
-          </div>
+          {activeTicketNo ? (
+            <div>
+              <span className="text-[9px] font-bold text-slate-400 block">TICKET NUMBER</span>
+              <span className="font-bold text-slate-800">{activeTicketNo}</span>
+            </div>
+          ) : null}
           <div>
             <span className="text-[9px] font-bold text-slate-400 block">ISSUE DATE</span>
             <span className="font-bold text-slate-800">{safeHeaderDate}</span>
@@ -1202,8 +1202,8 @@ export function ETicketPdfTemplate({
                   <tr>
                     <th className="p-2 w-8 text-center">#</th>
                     <th className="p-2">PASSENGER NAME</th>
-                    <th className="p-2">PASSPORT NO</th>
-                    <th className="p-2">TICKET NO</th>
+                    {hasAnyPassport && <th className="p-2">PASSPORT NO</th>}
+                    {hasAnyTicket && <th className="p-2">TICKET NO</th>}
                     <th className="p-2 text-center">TYPE</th>
                   </tr>
                 </thead>
@@ -1212,8 +1212,8 @@ export function ETicketPdfTemplate({
                     <tr key={`p-pax-${pIdx}`} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                       <td className="p-2 text-center text-slate-400 font-bold">{pIdx + 1}</td>
                       <td className="p-2 font-black text-slate-900">{p.name}</td>
-                      <td className="p-2 font-bold text-slate-700">{p.passport_no}</td>
-                      <td className="p-2 font-bold text-indigo-900">{p.ticket_no}</td>
+                      {hasAnyPassport && <td className="p-2 font-bold text-slate-700">{p.passport_no || '-'}</td>}
+                      {hasAnyTicket && <td className="p-2 font-bold text-indigo-900">{p.ticket_no || '-'}</td>}
                       <td className="p-2 text-center font-bold text-emerald-800">{p.type}</td>
                     </tr>
                   ))}
@@ -1266,11 +1266,12 @@ export function HotelVoucherPdfTemplate({
   hcnMakkah = '',
   hcnMadina = '',
   voucherNo = '',
+  issueDate = '',
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
   const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
-  const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safeDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
   const safeVoucherNo = String(voucherNo || (header?.sr_no ? `HV-${header.sr_no}` : 'HV-1001')).toUpperCase()
 
   const mList = Array.isArray(makkahHotels) && makkahHotels.length > 0
@@ -1443,11 +1444,12 @@ export function TransportVoucherPdfTemplate({
   transportRows = [],
   driverContact = '',
   voucherNo = '',
+  issueDate = '',
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
   const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
-  const safeDate = String(header?.date || new Date().toISOString().slice(0, 10))
+  const safeDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
   const safeVoucherNo = String(voucherNo || (header?.sr_no ? `TV-${header.sr_no}` : 'TV-1001')).toUpperCase()
 
   const tList = Array.isArray(transportRows) && transportRows.length > 0
@@ -1581,6 +1583,7 @@ export function AllInOnePdfTemplate({
   hcnMakkah = '',
   hcnMadina = '',
   driverContact = '',
+  issueDate = '',
   comments = ''
 }) {
   return (
@@ -1599,6 +1602,7 @@ export function AllInOnePdfTemplate({
           flightItinerary={flightItinerary}
           passengerList={passengerList}
           pnr={pnr}
+          issueDate={issueDate}
           mode="grouped"
         />
       </div>
@@ -1617,6 +1621,7 @@ export function AllInOnePdfTemplate({
           madinaHotels={madinaHotels}
           hcnMakkah={hcnMakkah}
           hcnMadina={hcnMadina}
+          issueDate={issueDate}
           comments={comments}
         />
       </div>
@@ -1633,6 +1638,7 @@ export function AllInOnePdfTemplate({
           paxSummary={pax}
           transportRows={transportRows}
           driverContact={driverContact}
+          issueDate={issueDate}
           comments={comments}
         />
       </div>
