@@ -306,7 +306,7 @@ function parseGalileoTerminalText(rawText) {
 
   // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE & GDS MODIFIERS
   // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 6.I/1SURNAME/GIVEN*20JUN25
-  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*(?:(I|FI|INF)[\/-]?(?:\d+)?\s*)?([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
+  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*(?:(I|FI|INF)(?:[/\-]\d*|\d+[/\-]))?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
 
   for (const line of lines) {
     // 1. Scan line for passenger tokens (multi-passenger line support)
