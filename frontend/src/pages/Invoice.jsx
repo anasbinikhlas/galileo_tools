@@ -127,14 +127,105 @@ export default function Invoice() {
     if (!clientId) return
     const client = savedClients.find(c => c.id === clientId)
     if (client) {
+      // 1. Build Passenger Ticket List from imported client
+      const paxList = Array.isArray(client.passengerList) && client.passengerList.length > 0 
+        ? client.passengerList 
+        : (Array.isArray(client.passengers) && client.passengers.length > 0 ? client.passengers : [client.name || 'CLIENT'])
+
+      let flightSector = 'KHI-JED'
+      if (Array.isArray(client.flightItinerary) && client.flightItinerary.length > 0) {
+        const depSec = client.flightItinerary[0]?.sector
+        if (depSec) flightSector = depSec
+      } else if (client.depFlight?.sector) {
+        flightSector = client.depFlight.sector
+      }
+
+      const totalTicketAmt = Number(client.pax?.ticket_total || 0)
+      const perPaxPrice = totalTicketAmt > 0 && paxList.length > 0 ? Math.round(totalTicketAmt / paxList.length) : 0
+
+      const importedTicketPassengers = paxList.map((p) => {
+        const pName = typeof p === 'string' ? p : (p.name || p.passengerName || client.name)
+        const pTicket = typeof p === 'object' && p !== null ? (p.ticket_no || p.ticketNo || '') : ''
+        const pPort = typeof p === 'object' && p !== null ? (p.passport_no || p.passportNo || '') : ''
+
+        return {
+          date: client.date || client.header?.date || new Date().toISOString().slice(0, 10),
+          invoiceNo: invoiceData.invoiceNo || 'INV-1001',
+          ticketNo: pTicket,
+          passportNo: pPort,
+          passengerName: pName,
+          sector: flightSector,
+          classType: 'Y',
+          amount: perPaxPrice
+        }
+      })
+
+      // 2. Build Service Items from imported client
+      let importedItems = []
+      if (Array.isArray(client.items) && client.items.length > 0) {
+        importedItems = client.items
+      } else if (Array.isArray(client.itemizedCharges) && client.itemizedCharges.length > 0) {
+        importedItems = client.itemizedCharges
+      } else {
+        if (client.visa?.price && Number(client.visa.price) > 0) {
+          importedItems.push({
+            description: `${client.visa.qty || 1} x ${client.visa.type || 'UMRAH'} VISA`,
+            amount: Number(client.visa.price)
+          })
+        }
+        if (Array.isArray(client.makkahHotels)) {
+          client.makkahHotels.forEach(h => {
+            if (h.hotel_name && h.night_price) {
+              const hPrice = Number(h.night_price) * (Number(h.nights) || 1) * (Number(h.room_qty) || 1)
+              importedItems.push({
+                description: `${h.hotel_name} (${h.nights || 1} Nites - ${h.room_type || 'Room'})`,
+                amount: hPrice
+              })
+            }
+          })
+        }
+        if (Array.isArray(client.madinaHotels)) {
+          client.madinaHotels.forEach(h => {
+            if (h.hotel_name && h.night_price) {
+              const hPrice = Number(h.night_price) * (Number(h.nights) || 1) * (Number(h.room_qty) || 1)
+              importedItems.push({
+                description: `${h.hotel_name} (${h.nights || 1} Nites - ${h.room_type || 'Room'})`,
+                amount: hPrice
+              })
+            }
+          })
+        }
+        if (Array.isArray(client.transportRows)) {
+          client.transportRows.forEach(t => {
+            if (t.type && t.price) {
+              importedItems.push({
+                description: `${t.type} (${t.sector || 'Transport'})`,
+                amount: Number(t.price)
+              })
+            }
+          })
+        }
+      }
+
+      if (importedItems.length === 0) {
+        importedItems = invoiceData.items && invoiceData.items.length > 0 ? invoiceData.items : [{ description: 'PACKAGE / SERVICE CHARGE', amount: 0 }]
+      }
+
+      // 3. Recalculate financials and update invoice state
+      const math = recalculateFinancials(importedItems, importedTicketPassengers, invoiceData.discount, invoiceData.amountPaid)
+
       setInvoiceData(prev => ({
         ...prev,
         clientName: client.name || '',
         phone: client.phone || client.header?.phone || '',
         whatsapp: client.whatsapp || client.header?.whatsapp || '',
-        email: client.email || client.header?.email || ''
+        email: client.email || client.header?.email || '',
+        ticketPassengers: importedTicketPassengers,
+        items: importedItems,
+        ...math
       }))
-      toast.success(`Client details pre-filled for: ${client.name}`)
+
+      toast.success(`Imported client: ${client.name} (${importedTicketPassengers.length} pax)`)
     }
   }
 
