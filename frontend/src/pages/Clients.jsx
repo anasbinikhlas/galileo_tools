@@ -1206,7 +1206,7 @@ export default function Clients() {
         autoHotels.push({
           date: header.date || new Date().toISOString().slice(0, 10),
           hotelName: `MAKKAH HOTEL: ${h.hotel_name.toUpperCase()}`,
-          roomType: h.room_type ? h.room_type.toUpperCase() : 'STANDARD ROOM',
+          roomType: h.room_type ? h.room_type.toUpperCase() : '',
           roomQty: qty,
           checkIn: h.check_in || '',
           checkOut: h.check_out || '',
@@ -1225,7 +1225,7 @@ export default function Clients() {
         autoHotels.push({
           date: header.date || new Date().toISOString().slice(0, 10),
           hotelName: `MADINA HOTEL: ${h.hotel_name.toUpperCase()}`,
-          roomType: h.room_type ? h.room_type.toUpperCase() : 'STANDARD ROOM',
+          roomType: h.room_type ? h.room_type.toUpperCase() : '',
           roomQty: qty,
           checkIn: h.check_in || '',
           checkOut: h.check_out || '',

@@ -1376,7 +1376,16 @@ export function HotelVoucherPdfTemplate({
                     <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
                     <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
                     <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
-                    <td className="p-2.5 font-bold text-slate-700">{h.room_qty || 1} x {h.room_type || 'STANDARD'}</td>
+                    <td className="p-2.5 font-bold text-slate-700">
+                      {(() => {
+                        const q = h.room_qty || h.roomQty || h.qty
+                        const t = (h.room_type || h.roomType || h.type || '').trim()
+                        if (q && t) return `${q} X ${t.toUpperCase()}`
+                        if (t) return t.toUpperCase()
+                        if (q) return `${q} ROOM${Number(q) > 1 ? 'S' : ''}`
+                        return '-'
+                      })()}
+                    </td>
                     <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMakkah || 'CONFIRMED'}</td>
                   </tr>
                 ))}
@@ -1410,7 +1419,16 @@ export function HotelVoucherPdfTemplate({
                     <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
                     <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
                     <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
-                    <td className="p-2.5 font-bold text-slate-700">{h.room_qty || 1} x {h.room_type || 'STANDARD'}</td>
+                    <td className="p-2.5 font-bold text-slate-700">
+                      {(() => {
+                        const q = h.room_qty || h.roomQty || h.qty
+                        const t = (h.room_type || h.roomType || h.type || '').trim()
+                        if (q && t) return `${q} X ${t.toUpperCase()}`
+                        if (t) return t.toUpperCase()
+                        if (q) return `${q} ROOM${Number(q) > 1 ? 'S' : ''}`
+                        return '-'
+                      })()}
+                    </td>
                     <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMadina || 'CONFIRMED'}</td>
                   </tr>
                 ))}
