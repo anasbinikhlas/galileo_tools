@@ -434,15 +434,6 @@ function parseGalileoTerminalText(rawText) {
 }
 
 // ── DATE & NIGHTS ARITHMETIC HELPERS ──
-function parseCustomDate(str) {
-  if (!str) return null
-  const s = String(str).trim()
-
-  const monthMap = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
-  }
-
 function parseCustomDate(str, fallbackYear = new Date().getFullYear()) {
   if (!str) return null
   const s = String(str).trim()
