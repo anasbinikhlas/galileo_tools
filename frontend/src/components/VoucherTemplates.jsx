@@ -1197,13 +1197,13 @@ export function ETicketPdfTemplate({
               PASSENGER DETAILS ({formattedPassengers.length})
             </div>
             <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-xs text-left border-collapse">
+              <table className="w-full text-xs text-center border-collapse">
                 <thead className="bg-indigo-50 text-indigo-950 font-bold text-[10px]">
                   <tr>
                     <th className="p-2 w-10 text-center">#</th>
-                    <th className="p-2">PASSENGER NAME</th>
-                    {hasAnyPassport && <th className="p-2 w-36">PASSPORT NO</th>}
-                    {hasAnyTicket && <th className="p-2 w-44">TICKET NO</th>}
+                    <th className="p-2 text-center">PASSENGER NAME</th>
+                    {hasAnyPassport && <th className="p-2 w-36 text-center">PASSPORT NO</th>}
+                    {hasAnyTicket && <th className="p-2 w-44 text-center">TICKET NO</th>}
                     <th className="p-2 w-24 text-center">TYPE</th>
                   </tr>
                 </thead>
@@ -1211,9 +1211,9 @@ export function ETicketPdfTemplate({
                   {formattedPassengers.map((p, pIdx) => (
                     <tr key={`p-pax-${pIdx}`} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                       <td className="p-2 text-center text-slate-400 font-bold">{pIdx + 1}</td>
-                      <td className="p-2 font-black text-slate-900">{p.name}</td>
-                      {hasAnyPassport && <td className="p-2 font-bold text-slate-700">{p.passport_no || '-'}</td>}
-                      {hasAnyTicket && <td className="p-2 font-bold text-indigo-900">{p.ticket_no || '-'}</td>}
+                      <td className="p-2 text-center font-black text-slate-900">{p.name}</td>
+                      {hasAnyPassport && <td className="p-2 text-center font-bold text-slate-700">{p.passport_no || '-'}</td>}
+                      {hasAnyTicket && <td className="p-2 text-center font-bold text-indigo-900">{p.ticket_no || '-'}</td>}
                       <td className="p-2 text-center">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                           p.type === 'CHD' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
