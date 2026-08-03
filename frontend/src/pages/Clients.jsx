@@ -988,9 +988,90 @@ export default function Clients() {
     const flightSector = flightItinerary.map(f => f.sector).filter(Boolean).join(' / ') || 'KHI-JED-KHI'
     const ticketVal = Number(activeTicketTotal || computedTicketTotal || 0)
 
-    if (passengerList && passengerList.length > 0) {
-      const perTicketVal = ticketVal > 0 ? Math.round(ticketVal / passengerList.length) : 0
-      autoPassengers = passengerList.map((pName) => ({
+    const adtQty = Number(pax.adt || 0)
+    const adtFare = Number(pax.adt_price || 0)
+    const childQty = Number(pax.child || 0)
+    const childFare = Number(pax.child_price || 0)
+    const infantQty = Number(pax.infant || 0)
+    const infantFare = Number(pax.infant_price || 0)
+
+    const totalPaxFromQuantities = adtQty + childQty + infantQty
+
+    // List of known/parsed passenger names
+    const knownNames = (passengerList && passengerList.length > 0)
+      ? passengerList.map(n => n.trim()).filter(Boolean)
+      : (header.name && header.name.trim() ? [header.name.trim()] : [])
+
+    if (totalPaxFromQuantities > 0) {
+      let currentPaxIdx = 1
+
+      // 1. Generate Adults
+      for (let a = 0; a < adtQty; a++) {
+        const paxName = knownNames[currentPaxIdx - 1] 
+          ? knownNames[currentPaxIdx - 1]
+          : (currentPaxIdx === 1 && header.name ? header.name.trim() : `Passenger ${currentPaxIdx} Adult`)
+        
+        const paxAmount = adtFare > 0 ? adtFare : (ticketVal > 0 ? Math.round(ticketVal / totalPaxFromQuantities) : 0)
+
+        autoPassengers.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          ticketNo: '',
+          passengerName: paxName,
+          sector: flightSector,
+          amount: paxAmount
+        })
+        currentPaxIdx++
+      }
+
+      // 2. Generate Children
+      for (let c = 0; c < childQty; c++) {
+        const paxName = knownNames[currentPaxIdx - 1] 
+          ? knownNames[currentPaxIdx - 1]
+          : `Passenger ${currentPaxIdx} Child`
+
+        const paxAmount = childFare > 0 ? childFare : (ticketVal > 0 ? Math.round(ticketVal / totalPaxFromQuantities) : 0)
+
+        autoPassengers.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          ticketNo: '',
+          passengerName: paxName,
+          sector: flightSector,
+          amount: paxAmount
+        })
+        currentPaxIdx++
+      }
+
+      // 3. Generate Infants
+      for (let inf = 0; inf < infantQty; inf++) {
+        const paxName = knownNames[currentPaxIdx - 1] 
+          ? knownNames[currentPaxIdx - 1]
+          : `Passenger ${currentPaxIdx} Infant`
+
+        const paxAmount = infantFare > 0 ? infantFare : (ticketVal > 0 ? Math.round(ticketVal / totalPaxFromQuantities) : 0)
+
+        autoPassengers.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          ticketNo: '',
+          passengerName: paxName,
+          sector: flightSector,
+          amount: paxAmount
+        })
+        currentPaxIdx++
+      }
+
+      // If there are additional known names beyond totalPaxFromQuantities, include them as well
+      for (let extra = currentPaxIdx - 1; extra < knownNames.length; extra++) {
+        autoPassengers.push({
+          date: header.date || new Date().toISOString().slice(0, 10),
+          ticketNo: '',
+          passengerName: knownNames[extra],
+          sector: flightSector,
+          amount: ticketVal > 0 ? Math.round(ticketVal / knownNames.length) : 0
+        })
+      }
+    } else if (knownNames.length > 0) {
+      const perTicketVal = ticketVal > 0 ? Math.round(ticketVal / knownNames.length) : 0
+      autoPassengers = knownNames.map((pName) => ({
         date: header.date || new Date().toISOString().slice(0, 10),
         ticketNo: '',
         passengerName: pName,
@@ -1002,7 +1083,7 @@ export default function Clients() {
         {
           date: header.date || new Date().toISOString().slice(0, 10),
           ticketNo: '',
-          passengerName: header.name,
+          passengerName: header.name.trim(),
           sector: flightSector,
           amount: ticketVal
         }
@@ -1018,24 +1099,17 @@ export default function Clients() {
       const perVisaPrice = Number(visa.price || 0) * rateMultiplier
       const totalVisaVal = (visaTotal > 0 ? visaTotal : (Number(visa.price || 0) * Number(visa.qty || 1))) * rateMultiplier
 
-      if (passengerList && passengerList.length > 0) {
-        const perPaxVisa = totalVisaVal > 0 ? Math.round(totalVisaVal / passengerList.length) : perVisaPrice
-        autoVisas = passengerList.map((pName) => ({
-          date: header.date || new Date().toISOString().slice(0, 10),
-          passengerName: pName,
-          visaType: `${visa.type || 'UMRAH VISA'} PROCESSING`,
-          amount: perPaxVisa
-        }))
-      } else {
-        autoVisas = [
-          {
-            date: header.date || new Date().toISOString().slice(0, 10),
-            passengerName: header.name || 'CLIENT',
-            visaType: `${visa.type || 'UMRAH VISA'} (QTY: ${visa.qty || 1})`,
-            amount: totalVisaVal
-          }
-        ]
-      }
+      const allPaxNames = autoPassengers.length > 0
+        ? autoPassengers.map(p => p.passengerName)
+        : (knownNames.length > 0 ? knownNames : [header.name || 'CLIENT'])
+
+      const perPaxVisa = totalVisaVal > 0 ? Math.round(totalVisaVal / allPaxNames.length) : perVisaPrice
+      autoVisas = allPaxNames.map((pName) => ({
+        date: header.date || new Date().toISOString().slice(0, 10),
+        passengerName: pName,
+        visaType: `${visa.type || 'UMRAH VISA'} PROCESSING`,
+        amount: perPaxVisa
+      }))
     }
 
     // 3. Hotel Section (Hotel Name + Room details + Nights + Converted Price - NO passenger names!)
