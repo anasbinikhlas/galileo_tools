@@ -443,6 +443,15 @@ function parseCustomDate(str) {
     jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
   }
 
+function parseCustomDate(str, fallbackYear = new Date().getFullYear()) {
+  if (!str) return null
+  const s = String(str).trim()
+
+  const monthMap = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  }
+
   // Pattern 1: DD-MM-YY or DD-MM-YYYY (e.g. "20-06-26", "30-06-2026")
   const matchNumeric = s.match(/^(\d{1,2})[-/\s.]+(\d{1,2})[-/\s.]+(\d{2,4})$/)
   if (matchNumeric) {
@@ -450,6 +459,7 @@ function parseCustomDate(str) {
     const month = parseInt(matchNumeric[2], 10) - 1
     let year = parseInt(matchNumeric[3], 10)
     if (year < 100) year = 2000 + year
+    if (year < 2020) year = fallbackYear
     if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
       return new Date(year, month, day)
     }
@@ -461,10 +471,11 @@ function parseCustomDate(str) {
     const day = parseInt(matchMonthStr[1], 10)
     const monthStr = matchMonthStr[2].toLowerCase()
     const monthIdx = monthMap[monthStr]
-    let year = new Date().getFullYear()
+    let year = fallbackYear
     if (matchMonthStr[4]) {
       const yrVal = parseInt(matchMonthStr[4], 10)
       year = yrVal < 100 ? 2000 + yrVal : yrVal
+      if (year < 2020) year = fallbackYear
     }
     if (monthIdx !== undefined && !isNaN(day)) {
       return new Date(year, monthIdx, day)
@@ -473,7 +484,11 @@ function parseCustomDate(str) {
 
   // Pattern 3: Standard Date.parse
   const parsed = Date.parse(s)
-  if (!isNaN(parsed)) return new Date(parsed)
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed)
+    if (d.getFullYear() < 2020) d.setFullYear(fallbackYear)
+    return d
+  }
 
   return null
 }
@@ -516,9 +531,17 @@ function formatDateToString(dateObj, templateStr) {
 function calculateNightsFromDates(checkIn, checkOut) {
   if (!checkIn || !checkOut) return 0
   try {
-    const d1 = parseCustomDate(checkIn)
-    const d2 = parseCustomDate(checkOut)
+    let fallbackYear = new Date().getFullYear()
+    const d2Parsed = parseCustomDate(checkOut, fallbackYear)
+    if (d2Parsed) fallbackYear = d2Parsed.getFullYear()
+
+    const d1 = parseCustomDate(checkIn, fallbackYear)
+    const d2 = d2Parsed || parseCustomDate(checkOut, fallbackYear)
+
     if (d1 && d2) {
+      if (Math.abs(d1.getFullYear() - d2.getFullYear()) > 1) {
+        d1.setFullYear(d2.getFullYear())
+      }
       if (d2 < d1 && d2.getMonth() < d1.getMonth()) {
         d2.setFullYear(d1.getFullYear() + 1)
       }
@@ -2513,10 +2536,7 @@ export default function Clients() {
                                 const val = e.target.value
                                 copy[i].check_in = val
                                 copy[i].last_edited = 'check_in'
-                                if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                  const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
-                                  if (calcOut) copy[i].check_out = calcOut
-                                } else if (copy[i].check_out) {
+                                if (val && copy[i].check_out) {
                                   const calcN = calculateNightsFromDates(val, copy[i].check_out)
                                   if (calcN > 0) copy[i].nights = String(calcN)
                                 }
@@ -2537,10 +2557,7 @@ export default function Clients() {
                                   const val = formatDateFromPicker(e.target.value)
                                   copy[i].check_in = val
                                   copy[i].last_edited = 'check_in'
-                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                    const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
-                                    if (calcOut) copy[i].check_out = calcOut
-                                  } else if (copy[i].check_out) {
+                                  if (val && copy[i].check_out) {
                                     const calcN = calculateNightsFromDates(val, copy[i].check_out)
                                     if (calcN > 0) copy[i].nights = String(calcN)
                                   }
@@ -2561,10 +2578,7 @@ export default function Clients() {
                                 const val = e.target.value
                                 copy[i].check_out = val
                                 copy[i].last_edited = 'check_out'
-                                if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                  const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
-                                  if (calcIn) copy[i].check_in = calcIn
-                                } else if (copy[i].check_in) {
+                                if (copy[i].check_in && val) {
                                   const calcN = calculateNightsFromDates(copy[i].check_in, val)
                                   if (calcN > 0) copy[i].nights = String(calcN)
                                 }
@@ -2585,10 +2599,7 @@ export default function Clients() {
                                   const val = formatDateFromPicker(e.target.value)
                                   copy[i].check_out = val
                                   copy[i].last_edited = 'check_out'
-                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                    const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
-                                    if (calcIn) copy[i].check_in = calcIn
-                                  } else if (copy[i].check_in) {
+                                  if (copy[i].check_in && val) {
                                     const calcN = calculateNightsFromDates(copy[i].check_in, val)
                                     if (calcN > 0) copy[i].nights = String(calcN)
                                   }
@@ -2607,15 +2618,14 @@ export default function Clients() {
                               const copy = [...makkahHotels]
                               const nVal = e.target.value
                               copy[i].nights = nVal
-                              if (copy[i].last_edited === 'check_out' && copy[i].check_out) {
-                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                if (calcIn) copy[i].check_in = calcIn
-                              } else if (copy[i].check_in) {
-                                const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
-                                if (calcOut) copy[i].check_out = calcOut
-                              } else if (copy[i].check_out) {
-                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                if (calcIn) copy[i].check_in = calcIn
+                              if (nVal && Number(nVal) > 0) {
+                                if (copy[i].check_in) {
+                                  const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                  if (calcOut) copy[i].check_out = calcOut
+                                } else if (copy[i].check_out) {
+                                  const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                  if (calcIn) copy[i].check_in = calcIn
+                                }
                               }
                               setMakkahHotels(copy)
                             }}
@@ -2679,10 +2689,7 @@ export default function Clients() {
                                 const val = e.target.value
                                 copy[i].check_in = val
                                 copy[i].last_edited = 'check_in'
-                                if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                  const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
-                                  if (calcOut) copy[i].check_out = calcOut
-                                } else if (copy[i].check_out) {
+                                if (val && copy[i].check_out) {
                                   const calcN = calculateNightsFromDates(val, copy[i].check_out)
                                   if (calcN > 0) copy[i].nights = String(calcN)
                                 }
@@ -2703,10 +2710,7 @@ export default function Clients() {
                                   const val = formatDateFromPicker(e.target.value)
                                   copy[i].check_in = val
                                   copy[i].last_edited = 'check_in'
-                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                    const calcOut = calculateCheckoutFromCheckinAndNights(val, copy[i].nights)
-                                    if (calcOut) copy[i].check_out = calcOut
-                                  } else if (copy[i].check_out) {
+                                  if (val && copy[i].check_out) {
                                     const calcN = calculateNightsFromDates(val, copy[i].check_out)
                                     if (calcN > 0) copy[i].nights = String(calcN)
                                   }
@@ -2727,10 +2731,7 @@ export default function Clients() {
                                 const val = e.target.value
                                 copy[i].check_out = val
                                 copy[i].last_edited = 'check_out'
-                                if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                  const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
-                                  if (calcIn) copy[i].check_in = calcIn
-                                } else if (copy[i].check_in) {
+                                if (copy[i].check_in && val) {
                                   const calcN = calculateNightsFromDates(copy[i].check_in, val)
                                   if (calcN > 0) copy[i].nights = String(calcN)
                                 }
@@ -2751,10 +2752,7 @@ export default function Clients() {
                                   const val = formatDateFromPicker(e.target.value)
                                   copy[i].check_out = val
                                   copy[i].last_edited = 'check_out'
-                                  if (copy[i].nights && Number(copy[i].nights) > 0) {
-                                    const calcIn = calculateCheckinFromCheckoutAndNights(val, copy[i].nights)
-                                    if (calcIn) copy[i].check_in = calcIn
-                                  } else if (copy[i].check_in) {
+                                  if (copy[i].check_in && val) {
                                     const calcN = calculateNightsFromDates(copy[i].check_in, val)
                                     if (calcN > 0) copy[i].nights = String(calcN)
                                   }
@@ -2773,15 +2771,14 @@ export default function Clients() {
                               const copy = [...madinaHotels]
                               const nVal = e.target.value
                               copy[i].nights = nVal
-                              if (copy[i].last_edited === 'check_out' && copy[i].check_out) {
-                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                if (calcIn) copy[i].check_in = calcIn
-                              } else if (copy[i].check_in) {
-                                const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
-                                if (calcOut) copy[i].check_out = calcOut
-                              } else if (copy[i].check_out) {
-                                const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                if (calcIn) copy[i].check_in = calcIn
+                              if (nVal && Number(nVal) > 0) {
+                                if (copy[i].check_in) {
+                                  const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                  if (calcOut) copy[i].check_out = calcOut
+                                } else if (copy[i].check_out) {
+                                  const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
+                                  if (calcIn) copy[i].check_in = calcIn
+                                }
                               }
                               setMadinaHotels(copy)
                             }}
