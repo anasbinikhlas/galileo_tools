@@ -400,7 +400,7 @@ function parseGalileoTerminalText(rawText) {
     const flightMatch = line.match(/^(?:\d+\.\s*)?([A-Z0-9]{2})\s*(\d{1,4})\s*([A-Z])?\s*(\d{1,2}[A-Z]{3})\s*([A-Z]{6})\s*(?:[A-Z0-9]{3})?\s*(\d{4})\s*(#?\d{4})/i)
     if (flightMatch) {
       const airline = flightMatch[1].toUpperCase()
-      const flight_no = `${airline} ${flightMatch[2]}`
+      const flight_no = flightMatch[2]
       const date = flightMatch[4].toUpperCase()
       const rawSector = flightMatch[5].toUpperCase()
       const sector = `${rawSector.slice(0, 3)}-${rawSector.slice(3, 6)}`

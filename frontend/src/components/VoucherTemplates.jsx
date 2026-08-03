@@ -1170,7 +1170,14 @@ export function ETicketPdfTemplate({
                 {flights.map((f, fIdx) => (
                   <tr key={`f-row-${fIdx}`} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                     <td className="p-2 font-bold text-indigo-950">
-                      {f.airline || 'AIRLINE'} {f.flight_no || f.flightNo || ''}
+                      {(() => {
+                        const al = (f.airline || '').trim()
+                        const fn = (f.flight_no || f.flightNo || '').trim()
+                        if (!al) return fn || 'FLIGHT'
+                        if (!fn) return al
+                        if (fn.toUpperCase().startsWith(al.toUpperCase())) return fn
+                        return `${al} ${fn}`
+                      })()}
                     </td>
                     <td className="p-2 font-black text-slate-900">{f.sector || 'KHI - JED'}</td>
                     <td className="p-2 text-slate-800">{f.date || '05 MAR'}</td>
