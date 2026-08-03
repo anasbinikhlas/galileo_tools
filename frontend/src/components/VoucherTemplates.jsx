@@ -1164,8 +1164,6 @@ export function ETicketPdfTemplate({
                   <th className="p-2">DATE</th>
                   <th className="p-2">DEP TIME</th>
                   <th className="p-2">ARR TIME</th>
-                  <th className="p-2 text-center">CLASS</th>
-                  <th className="p-2 text-center">BAGGAGE</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
@@ -1178,8 +1176,6 @@ export function ETicketPdfTemplate({
                     <td className="p-2 text-slate-800">{f.date || '05 MAR'}</td>
                     <td className="p-2 font-bold text-emerald-800">{f.dep_time || f.depTime || '--:--'}</td>
                     <td className="p-2 font-bold text-slate-700">{f.arr_time || f.arrTime || '--:--'}</td>
-                    <td className="p-2 text-center font-bold">{f.class_type || f.classType || 'Y'}</td>
-                    <td className="p-2 text-center font-bold text-slate-600">{f.baggage || '30KG'}</td>
                   </tr>
                 ))}
               </tbody>
