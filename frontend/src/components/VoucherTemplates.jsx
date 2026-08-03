@@ -1036,16 +1036,46 @@ export function ETicketPdfTemplate({
     ? passengerList
     : [safeHeaderName]
 
+  const adtCount = Number(pax?.adt || 0)
+  const childCount = Number(pax?.child || 0)
+  const infantCount = Number(pax?.infant || 0)
+
   const formattedPassengers = rawPaxList.map((p, idx) => {
+    const pName = typeof p === 'string' ? p : (p.name || p.passengerName || safeHeaderName)
+    
+    // Determine passenger type (ADT, CHD, INF)
+    let pType = 'ADT'
+    if (typeof p === 'object' && p !== null && (p.type || p.passengerType)) {
+      pType = p.type || p.passengerType
+    } else if (/INFANT|BABY|\(INF\)/i.test(pName)) {
+      pType = 'INF'
+    } else if (/\(CHD\)|CHILD/i.test(pName)) {
+      pType = 'CHD'
+    } else if (adtCount > 0 || childCount > 0 || infantCount > 0) {
+      if (idx < adtCount) {
+        pType = 'ADT'
+      } else if (idx < adtCount + childCount) {
+        pType = 'CHD'
+      } else if (idx < adtCount + childCount + infantCount) {
+        pType = 'INF'
+      }
+    }
+
     if (typeof p === 'string') {
-      return { name: p, passport_no: 'A' + (1029384 + idx), ticket_no: '176-5580-274-' + (600 + idx), gender: 'M/F', type: 'ADT' }
+      return { 
+        name: pName, 
+        passport_no: 'A' + (1029384 + idx), 
+        ticket_no: '176-5580-274-' + (600 + idx), 
+        gender: 'M/F', 
+        type: pType 
+      }
     }
     return {
-      name: p.name || p.passengerName || safeHeaderName,
-      passport_no: p.passport_no || p.passportNo || 'P' + (100000 + idx),
-      ticket_no: p.ticket_no || p.ticketNo || '176-5580-274-' + (600 + idx),
-      gender: p.gender || 'ADT',
-      type: p.type || 'ADT'
+      name: pName,
+      passport_no: p.passport_no || p.passportNo || ('P' + (100000 + idx)),
+      ticket_no: p.ticket_no || p.ticketNo || ('176-5580-274-' + (600 + idx)),
+      gender: p.gender || 'M/F',
+      type: p.type || pType
     }
   })
 
