@@ -305,19 +305,20 @@ function parseGalileoTerminalText(rawText) {
   let infantCount = 0
 
   // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE & GDS MODIFIERS
-  // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 4.1SURNAME/GIVEN*P-I01
-  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
+  // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 6.I/1SURNAME/GIVEN*20JUN25
+  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*(?:(I|FI|INF)[\/-]?(?:\d+)?\s*)?([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
 
   for (const line of lines) {
     // 1. Scan line for passenger tokens (multi-passenger line support)
     let paxMatch
     const linePaxRegex = new RegExp(paxRegex)
     while ((paxMatch = linePaxRegex.exec(line)) !== null) {
-      const surname = paxMatch[1].toUpperCase()
-      const rawGivenAndMods = paxMatch[2].trim().toUpperCase()
+      const infantPrefix = paxMatch[1] // 'I', 'FI', or 'INF' if present
+      const surname = paxMatch[2].toUpperCase()
+      const rawGivenAndMods = paxMatch[3].trim().toUpperCase()
 
       let isChild = false
-      let isInfant = false
+      let isInfant = !!infantPrefix
       let infantName = ''
 
       // Check for Child tags: *P-C05, *C05, (CHD), *CHD, etc.
@@ -335,8 +336,9 @@ function parseGalileoTerminalText(rawText) {
         }
       }
 
-      // Clean given name by stripping GDS modifiers (*P-C05, *P-I01..., MR, MRS, etc.)
+      // Clean given name by stripping GDS modifiers & birthdates (*20JUN25, *P-C05, *P-I01..., MR, MRS, etc.)
       let cleanGiven = rawGivenAndMods
+        .replace(/\*[0-9]{1,2}[A-Z]{3}[0-9]{2,4}/gi, '')
         .replace(/\*P-[A-Z0-9]+(\/[A-Z0-9/]+)?/gi, '')
         .replace(/\*[A-Z0-9]+/gi, '')
         .replace(/\s*(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER|\(INF\)|\(CHD\)|\(ADT\))[\*\s]*$/i, '')
@@ -349,14 +351,14 @@ function parseGalileoTerminalText(rawText) {
         if (formattedName && !passengers.includes(formattedName)) {
           passengers.push(formattedName)
         }
-      } else if (isInfant && !rawGivenAndMods.includes('*P-I') && !rawGivenAndMods.includes('*I') && !rawGivenAndMods.includes('(INF)')) {
-        // Standalone infant line
+      } else if (isInfant && infantPrefix) {
+        // Dedicated Infant line with I/1 or FI/1 prefix (e.g. 6.I/1USAMA/SARAH*20JUN25)
         infantCount++
         if (formattedName && !passengers.includes(formattedName)) {
           passengers.push(formattedName)
         }
       } else if (isInfant) {
-        // Adult with attached Infant
+        // Adult with attached Infant modifier (*P-I01)
         adtCount++
         if (formattedName && !passengers.includes(formattedName)) {
           passengers.push(formattedName)
