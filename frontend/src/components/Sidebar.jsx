@@ -51,9 +51,15 @@ const navSections = [
         ready: true,
       },
       {
-        path: '/invoice',
+        path: '/invoices',
         icon: 'ti-file-invoice',
-        label: 'Invoice',
+        label: 'Invoices',
+        ready: true,
+      },
+      {
+        path: '/dummy-bookings',
+        icon: 'ti-ticket',
+        label: 'Dummy Bookings',
         ready: true,
       },
       {

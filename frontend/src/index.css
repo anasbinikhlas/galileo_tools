@@ -112,7 +112,8 @@
 
   #printable-color-package,
   #printable-package,
-  #printable-invoice {
+  #printable-invoice,
+  #printable-dummy-booking {
     position: static !important;
     display: block !important;
     width: 100% !important;
@@ -122,15 +123,52 @@
     padding: 12px !important;
     border: none !important;
     box-shadow: none !important;
-    page-break-inside: avoid !important;
     background: #ffffff !important;
     color: #000000 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+  .flight-sector-card,
+  .hotel-leg-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .modal-overlay-print {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .modal-dialog-print {
+    position: static !important;
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .modal-body-print {
+    position: static !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    display: block !important;
   }
 }

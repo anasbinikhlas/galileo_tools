@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { ColorPdfTemplate, StandardPdfTemplate, InvoicePdfTemplate, ETicketPdfTemplate, HotelVoucherPdfTemplate, TransportVoucherPdfTemplate, AllInOnePdfTemplate } from '../components/VoucherTemplates'
+import PackageSalesReportModal from '../components/PackageSalesReportModal'
 
 // API Key configuration fallback
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
@@ -692,6 +693,7 @@ export default function Clients() {
   const [userApiKey, setUserApiKey] = useState(apiKey || '')
   const [showKeyInput, setShowKeyInput] = useState(!apiKey)
   const [showPrintModal, setShowPrintModal] = useState(false) // false | 'standard' | 'color'
+  const [showSalesReportModal, setShowSalesReportModal] = useState(false)
 
   // Invoice Modal & Data States
   const [showInvoiceModal, setShowInvoiceModal] = useState(false)
@@ -739,22 +741,56 @@ export default function Clients() {
   // 2. Live Visa Card Total (Visa Qty x Visa Price)
   const visaTotal = Number(visa.qty || 1) * Number(visa.price || 0)
 
-  // 3. Live Makkah Hotels Total (Room Qty x Nights x Night Price)
+  // 3. Live Makkah Hotels Total (Support per-room dates & prices if unchecked)
   const makkahTotal = makkahHotels.reduce((sum, h) => {
-    const qty = Number(h.room_qty || 1)
-    const calcN = calculateNightsFromDates(h.check_in, h.check_out)
-    const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
-    const price = Number(h.night_price || 0)
-    return sum + (qty * nights * price)
+    if (!h.hotel_name) return sum
+    const qty = Math.max(1, parseInt(h.room_qty || '1', 10))
+    const sameDetails = h.same_details_for_all_rooms !== false
+
+    if (sameDetails || qty === 1) {
+      const calcN = calculateNightsFromDates(h.check_in, h.check_out)
+      const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
+      const price = Number(h.night_price || 0)
+      return sum + (qty * nights * price)
+    } else {
+      let hotelSum = 0
+      for (let r = 1; r <= qty; r++) {
+        const rIn = r === 1 ? h.check_in : (h[`check_in_${r}`] || h.check_in)
+        const rOut = r === 1 ? h.check_out : (h[`check_out_${r}`] || h.check_out)
+        const rN = r === 1 ? h.nights : (h[`nights_${r}`] || h.nights)
+        const calcN = calculateNightsFromDates(rIn, rOut)
+        const nights = Number(rN) > 0 ? Number(rN) : (calcN > 0 ? calcN : 1)
+        const price = Number(r === 1 ? h.night_price : (h[`night_price_${r}`] || h.night_price || 0))
+        hotelSum += nights * price
+      }
+      return sum + hotelSum
+    }
   }, 0)
 
-  // 4. Live Madina Hotels Total (Room Qty x Nights x Night Price)
+  // 4. Live Madina Hotels Total (Support per-room dates & prices if unchecked)
   const madinaTotal = madinaHotels.reduce((sum, h) => {
-    const qty = Number(h.room_qty || 1)
-    const calcN = calculateNightsFromDates(h.check_in, h.check_out)
-    const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
-    const price = Number(h.night_price || 0)
-    return sum + (qty * nights * price)
+    if (!h.hotel_name) return sum
+    const qty = Math.max(1, parseInt(h.room_qty || '1', 10))
+    const sameDetails = h.same_details_for_all_rooms !== false
+
+    if (sameDetails || qty === 1) {
+      const calcN = calculateNightsFromDates(h.check_in, h.check_out)
+      const nights = Number(h.nights) > 0 ? Number(h.nights) : (calcN > 0 ? calcN : 1)
+      const price = Number(h.night_price || 0)
+      return sum + (qty * nights * price)
+    } else {
+      let hotelSum = 0
+      for (let r = 1; r <= qty; r++) {
+        const rIn = r === 1 ? h.check_in : (h[`check_in_${r}`] || h.check_in)
+        const rOut = r === 1 ? h.check_out : (h[`check_out_${r}`] || h.check_out)
+        const rN = r === 1 ? h.nights : (h[`nights_${r}`] || h.nights)
+        const calcN = calculateNightsFromDates(rIn, rOut)
+        const nights = Number(rN) > 0 ? Number(rN) : (calcN > 0 ? calcN : 1)
+        const price = Number(r === 1 ? h.night_price : (h[`night_price_${r}`] || h.night_price || 0))
+        hotelSum += nights * price
+      }
+      return sum + hotelSum
+    }
   }, 0)
 
   // 5. Live Transportation Card Total (Sum of Qty x Price across all rows)
@@ -829,6 +865,12 @@ export default function Clients() {
         infant_price: data.infant_price ?? p.infant_price,
         ticket_total: data.ticket_total ?? p.ticket_total
       }))
+
+      if (Array.isArray(data.passengers) && data.passengers.length > 0) {
+        setPassengerList(data.passengers)
+      } else if (data.name) {
+        setPassengerList([data.name])
+      }
 
       if (Array.isArray(data.flights) && data.flights.length > 0) {
         setFlightItinerary(data.flights)
@@ -956,6 +998,16 @@ export default function Clients() {
         })
         setPax(target.pax || { adt: '', adt_price: '', child: '', child_price: '', infant: '', infant_price: '', ticket_total: '' })
         
+        if (Array.isArray(target.passengerList) && target.passengerList.length > 0) {
+          setPassengerList(target.passengerList)
+        } else if (Array.isArray(target.passengers) && target.passengers.length > 0) {
+          setPassengerList(target.passengers)
+        } else if (target.name) {
+          setPassengerList([target.name])
+        } else {
+          setPassengerList([])
+        }
+
         if (Array.isArray(target.flightItinerary) && target.flightItinerary.length > 0) {
           setFlightItinerary(target.flightItinerary)
         } else if (target.depFlight || target.arrFlight) {
@@ -1068,7 +1120,19 @@ export default function Clients() {
 
     // 1. Ticket Section (ALL passenger names + sector + price)
     let autoPassengers = []
-    const flightSector = flightItinerary.map(f => f.sector).filter(Boolean).join(' / ') || 'KHI-JED-KHI'
+    let flightSector = 'KHI-JED-KHI'
+    const validSectors = (flightItinerary || []).map(f => f.sector).filter(Boolean)
+    if (validSectors.length > 1) {
+      const first = (validSectors[0] || '').split('-').map(s => s.trim())
+      const second = (validSectors[1] || '').split('-').map(s => s.trim())
+      if (first.length === 2 && second.length === 2 && first[1] === second[0]) {
+        flightSector = `${first[0]}-${first[1]}-${second[1]}`
+      } else {
+        flightSector = validSectors.join(' - ')
+      }
+    } else if (validSectors.length === 1) {
+      flightSector = validSectors[0]
+    }
     const ticketVal = Number(activeTicketTotal || computedTicketTotal || 0)
 
     const adtQty = Number(pax.adt || 0)
@@ -1269,7 +1333,8 @@ export default function Clients() {
 
     const calculatedSubtotal = tktTotal + visaTotalSum + hotelTotalSum + transportTotalSum + generalTotalSum
 
-    setInvoiceData({
+    const newInvoiceRecord = {
+      id: `inv-${Date.now()}`,
       invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
       invoiceDate: new Date().toISOString().slice(0, 10),
       dueDate: '',
@@ -1290,8 +1355,20 @@ export default function Clients() {
       status: 'UNPAID',
       paymentMethod: 'Bank Transfer',
       bankDetails: 'Meezan Bank - A/C 0102030405',
-      remarks: 'Thank you for your business. Balance due prior to flight departure.'
-    })
+      remarks: 'Thank you for your business. Balance due prior to flight departure.',
+      createdAt: new Date().toISOString()
+    }
+
+    setInvoiceData(newInvoiceRecord)
+
+    try {
+      const stored = localStorage.getItem('galileo_invoices')
+      const existingInvoices = stored ? JSON.parse(stored) : []
+      const filtered = existingInvoices.filter(inv => inv.clientName !== header.name || inv.invoiceNo !== newInvoiceRecord.invoiceNo)
+      localStorage.setItem('galileo_invoices', JSON.stringify([newInvoiceRecord, ...filtered]))
+    } catch (e) {
+      console.error('Failed to sync invoice to galileo_invoices', e)
+    }
 
     setShowInvoiceModal(true)
   }
@@ -1691,6 +1768,8 @@ export default function Clients() {
         ...pax,
         ticket_total: finalTicketTotal
       },
+      passengerList: passengerList.length > 0 ? passengerList : (header.name ? [header.name] : []),
+      passengers: passengerList.length > 0 ? passengerList : (header.name ? [header.name] : []),
       flightItinerary,
       depFlight: flightItinerary[0] || {},
       arrFlight: flightItinerary[flightItinerary.length - 1] || {},
@@ -1728,7 +1807,15 @@ export default function Clients() {
 
   const downloadPdf = async (elementId, customFileName) => {
     const targetId = elementId || (showPrintModal === 'color' ? 'printable-color-package' : 'printable-package')
-    const element = document.getElementById(targetId) || document.getElementById('printable-color-package') || document.getElementById('printable-package')
+    const element = document.getElementById(targetId)
+                 || document.getElementById('printable-eticket')
+                 || document.getElementById('eticket-page-0')
+                 || document.getElementById('printable-hotel-voucher')
+                 || document.getElementById('printable-transport-voucher')
+                 || document.getElementById('printable-all-in-one')
+                 || document.getElementById('printable-color-package')
+                 || document.getElementById('printable-package')
+                 || document.getElementById('printable-invoice')
     if (!element) {
       toast.error('Printable element not found')
       return
@@ -1961,6 +2048,15 @@ export default function Clients() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSalesReportModal(true)}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs px-3 py-1.5 rounded-md shadow-sm transition-all flex items-center gap-1.5 active:scale-95"
+                    title="Generate 13-column Ticket Sales Report for Excel & WhatsApp"
+                  >
+                    <i className="ti ti-table text-sm" />
+                    Send Sales Report
+                  </button>
                   {scanningTicket ? (
                     <span className="text-xs text-blue-600 font-semibold animate-pulse flex items-center gap-1">
                       <i className="ti ti-loader animate-spin" /> Scanning Ticket...
@@ -1969,7 +2065,7 @@ export default function Clients() {
                     <button
                       type="button"
                       onClick={handleClearTicket}
-                      className="text-xs font-semibold text-gray-500 hover:text-red-600 flex items-center gap-1 bg-gray-100 hover:bg-red-50 px-2.5 py-1 rounded-md transition-all"
+                      className="text-xs font-semibold text-gray-500 hover:text-red-600 flex items-center gap-1 bg-gray-100 hover:bg-red-50 px-2.5 py-1.5 rounded-md transition-all"
                       title="Clear Travel Ticket details"
                     >
                       <i className="ti ti-rotate-clockwise" /> Reset Ticket
@@ -2504,7 +2600,7 @@ export default function Clients() {
                     <tr>
                       <th className="p-2">HOTEL NAME</th>
                       <th className="p-2 w-16">ROOM QTY</th>
-                      <th className="p-2 w-24">ROOM TYPE</th>
+                      <th className="p-2 w-36">ROOM TYPE</th>
                       <th className="p-2">CHECK IN</th>
                       <th className="p-2">CHECK OUT</th>
                       <th className="p-2 w-16">NIGHTS</th>
@@ -2514,126 +2610,413 @@ export default function Clients() {
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {makkahHotels.map((h, i) => (
-                      <tr key={i}>
-                        <td className="p-2"><input type="text" value={h.hotel_name} onChange={(e) => { const copy = [...makkahHotels]; copy[i].hotel_name = e.target.value; setMakkahHotels(copy) }} placeholder="Hotel Name" className="w-full border rounded px-2 py-1 text-xs" /></td>
-                        <td className="p-2"><input type="number" value={h.room_qty} onChange={(e) => { const copy = [...makkahHotels]; copy[i].room_qty = e.target.value; setMakkahHotels(copy) }} placeholder="Qty" className="w-full border rounded px-1.5 py-1 text-xs text-center" /></td>
-                        <td className="p-2"><input type="text" value={h.room_type} onChange={(e) => { const copy = [...makkahHotels]; copy[i].room_type = e.target.value; setMakkahHotels(copy) }} placeholder="Room Type" className="w-full border rounded px-1.5 py-1 text-xs" /></td>
-                        <td className="p-2">
-                          <div className="relative flex items-center">
+                      <React.Fragment key={`mak-hotel-row-${i}`}>
+                        {Number(h.room_qty) > 1 && (
+                          <tr className="bg-amber-50/80 border-b border-amber-200/60">
+                            <td colSpan={8} className="px-3 py-1 text-left">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-amber-950">
+                                  <input
+                                    type="checkbox"
+                                    checked={h.same_details_for_all_rooms !== false}
+                                    onChange={(e) => {
+                                      const copy = [...makkahHotels]
+                                      copy[i].same_details_for_all_rooms = e.target.checked
+                                      setMakkahHotels(copy)
+                                    }}
+                                    className="w-3.5 h-3.5 text-amber-600 rounded cursor-pointer"
+                                  />
+                                  <span>Same Check-In/Out Dates & Night Price for all rooms</span>
+                                </label>
+                                {h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                                    Independent Check-In, Check-Out & Price enabled per room below
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        <tr>
+                          <td className="p-2 align-top">
                             <input
                               type="text"
-                              value={h.check_in}
+                              value={h.hotel_name || ''}
                               onChange={(e) => {
                                 const copy = [...makkahHotels]
-                                const val = e.target.value
-                                copy[i].check_in = val
-                                copy[i].last_edited = 'check_in'
-                                if (val && copy[i].check_out) {
-                                  const calcN = calculateNightsFromDates(val, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
-                                }
+                                copy[i].hotel_name = e.target.value
                                 setMakkahHotels(copy)
                               }}
-                              placeholder="Check In"
-                              className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                              placeholder="Hotel Name"
+                              className="w-full border rounded px-2 py-1 text-xs"
                             />
-                            <div className="absolute right-1.5 pointer-events-none text-gray-400">
-                              <i className="ti ti-calendar text-xs" />
-                            </div>
+                          </td>
+                          <td className="p-2 align-top">
                             <input
-                              type="date"
-                              className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  const copy = [...makkahHotels]
-                                  const val = formatDateFromPicker(e.target.value)
-                                  copy[i].check_in = val
-                                  copy[i].last_edited = 'check_in'
-                                  if (val && copy[i].check_out) {
-                                    const calcN = calculateNightsFromDates(val, copy[i].check_out)
-                                    if (calcN > 0) copy[i].nights = String(calcN)
-                                  }
-                                  setMakkahHotels(copy)
-                                }
-                              }}
-                              title="Select Check In date from calendar"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="relative flex items-center">
-                            <input
-                              type="text"
-                              value={h.check_out}
+                              type="number"
+                              value={h.room_qty || ''}
                               onChange={(e) => {
                                 const copy = [...makkahHotels]
-                                const val = e.target.value
-                                copy[i].check_out = val
-                                copy[i].last_edited = 'check_out'
-                                if (copy[i].check_in && val) {
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, val)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
-                                }
+                                copy[i].room_qty = e.target.value
                                 setMakkahHotels(copy)
                               }}
-                              placeholder="Check Out"
-                              className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                              placeholder="Qty"
+                              className="w-full border rounded px-1.5 py-1 text-xs text-center"
                             />
-                            <div className="absolute right-1.5 pointer-events-none text-gray-400">
-                              <i className="ti ti-calendar text-xs" />
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && (
+                                  <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room 1 Type:</span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={h.room_type || ''}
+                                  onChange={(e) => {
+                                    const copy = [...makkahHotels]
+                                    copy[i].room_type = e.target.value
+                                    setMakkahHotels(copy)
+                                  }}
+                                  placeholder={Number(h.room_qty) > 1 ? "Room 1 Type" : "Room Type"}
+                                  className="w-full border rounded px-1.5 py-1 text-xs font-semibold uppercase bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                />
+                              </div>
+
+                              {Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const extraList = Array.isArray(h.extra_room_types) ? h.extra_room_types : []
+                                const currentVal = extraList[extraIdx] || ''
+
+                                return (
+                                  <div key={`makkah-extra-room-${i}-${extraIdx}`} className="animate-in fade-in duration-150">
+                                    <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} Type:</span>
+                                    <input
+                                      type="text"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...makkahHotels]
+                                        const nextExtras = [...(Array.isArray(copy[i].extra_room_types) ? copy[i].extra_room_types : [])]
+                                        nextExtras[extraIdx] = e.target.value
+                                        copy[i].extra_room_types = nextExtras
+                                        setMakkahHotels(copy)
+                                      }}
+                                      placeholder={`Room ${roomNum} Type`}
+                                      className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs font-semibold uppercase bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                  </div>
+                                )
+                              })}
                             </div>
-                            <input
-                              type="date"
-                              className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  const copy = [...makkahHotels]
-                                  const val = formatDateFromPicker(e.target.value)
-                                  copy[i].check_out = val
-                                  copy[i].last_edited = 'check_out'
-                                  if (copy[i].check_in && val) {
-                                    const calcN = calculateNightsFromDates(copy[i].check_in, val)
-                                    if (calcN > 0) copy[i].nights = String(calcN)
-                                  }
-                                  setMakkahHotels(copy)
-                                }
-                              }}
-                              title="Select Check Out date from calendar"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number"
-                            value={h.nights}
-                            onChange={(e) => {
-                              const copy = [...makkahHotels]
-                              const nVal = e.target.value
-                              copy[i].nights = nVal
-                              if (nVal && Number(nVal) > 0) {
-                                if (copy[i].check_in) {
-                                  const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
-                                  if (calcOut) copy[i].check_out = calcOut
-                                } else if (copy[i].check_out) {
-                                  const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                  if (calcIn) copy[i].check_in = calcIn
-                                }
-                              }
-                              setMakkahHotels(copy)
-                            }}
-                            placeholder="Nights"
-                            className="w-full border rounded px-1.5 py-1 text-xs text-center"
-                          />
-                        </td>
-                        <td className="p-2"><input type="text" value={h.night_price} onChange={(e) => { const copy = [...makkahHotels]; copy[i].night_price = e.target.value; setMakkahHotels(copy) }} placeholder="Price" className="w-full border rounded px-1.5 py-1 text-xs font-semibold" /></td>
-                        <td className="p-2 text-center">
-                          {makkahHotels.length > 1 && (
-                            <button type="button" onClick={() => removeMakkahRow(i)} className="text-red-500 hover:text-red-700">
-                              <i className="ti ti-trash" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room 1 In:</span>
+                                )}
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    value={h.check_in || ''}
+                                    onChange={(e) => {
+                                      const copy = [...makkahHotels]
+                                      const val = e.target.value
+                                      copy[i].check_in = val
+                                      if (val && copy[i].check_out) {
+                                        const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                        if (calcN > 0) copy[i].nights = String(calcN)
+                                      }
+                                      setMakkahHotels(copy)
+                                    }}
+                                    placeholder="Check In"
+                                    className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                                  />
+                                  <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                    <i className="ti ti-calendar text-xs" />
+                                  </div>
+                                  <input
+                                    type="date"
+                                    className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const copy = [...makkahHotels]
+                                        const val = formatDateFromPicker(e.target.value)
+                                        copy[i].check_in = val
+                                        if (val && copy[i].check_out) {
+                                          const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                          if (calcN > 0) copy[i].nights = String(calcN)
+                                        }
+                                        setMakkahHotels(copy)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const keyName = `check_in_${roomNum}`
+                                const outKeyName = `check_out_${roomNum}`
+                                const nightsKeyName = `nights_${roomNum}`
+                                const currentVal = h[keyName] || h.check_in || ''
+
+                                return (
+                                  <div key={`makkah-extra-in-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} In:</span>
+                                    <div className="relative flex items-center">
+                                      <input
+                                        type="text"
+                                        value={currentVal}
+                                        onChange={(e) => {
+                                          const copy = [...makkahHotels]
+                                          const val = e.target.value
+                                          copy[i][keyName] = val
+                                          const outVal = copy[i][outKeyName] || copy[i].check_out
+                                          if (val && outVal) {
+                                            const calcN = calculateNightsFromDates(val, outVal)
+                                            if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                          }
+                                          setMakkahHotels(copy)
+                                        }}
+                                        placeholder={`Room ${roomNum} In`}
+                                        className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs pr-6 bg-amber-50/40"
+                                      />
+                                      <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                        <i className="ti ti-calendar text-xs" />
+                                      </div>
+                                      <input
+                                        type="date"
+                                        className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            const copy = [...makkahHotels]
+                                            const val = formatDateFromPicker(e.target.value)
+                                            copy[i][keyName] = val
+                                            const outVal = copy[i][outKeyName] || copy[i].check_out
+                                            if (val && outVal) {
+                                              const calcN = calculateNightsFromDates(val, outVal)
+                                              if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                            }
+                                            setMakkahHotels(copy)
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room 1 Out:</span>
+                                )}
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    value={h.check_out || ''}
+                                    onChange={(e) => {
+                                      const copy = [...makkahHotels]
+                                      const val = e.target.value
+                                      copy[i].check_out = val
+                                      if (copy[i].check_in && val) {
+                                        const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                        if (calcN > 0) copy[i].nights = String(calcN)
+                                      }
+                                      setMakkahHotels(copy)
+                                    }}
+                                    placeholder="Check Out"
+                                    className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                                  />
+                                  <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                    <i className="ti ti-calendar text-xs" />
+                                  </div>
+                                  <input
+                                    type="date"
+                                    className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const copy = [...makkahHotels]
+                                        const val = formatDateFromPicker(e.target.value)
+                                        copy[i].check_out = val
+                                        if (copy[i].check_in && val) {
+                                          const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                          if (calcN > 0) copy[i].nights = String(calcN)
+                                        }
+                                        setMakkahHotels(copy)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const keyName = `check_out_${roomNum}`
+                                const inKeyName = `check_in_${roomNum}`
+                                const nightsKeyName = `nights_${roomNum}`
+                                const currentVal = h[keyName] || h.check_out || ''
+
+                                return (
+                                  <div key={`makkah-extra-out-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} Out:</span>
+                                    <div className="relative flex items-center">
+                                      <input
+                                        type="text"
+                                        value={currentVal}
+                                        onChange={(e) => {
+                                          const copy = [...makkahHotels]
+                                          const val = e.target.value
+                                          copy[i][keyName] = val
+                                          const inVal = copy[i][inKeyName] || copy[i].check_in
+                                          if (inVal && val) {
+                                            const calcN = calculateNightsFromDates(inVal, val)
+                                            if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                          }
+                                          setMakkahHotels(copy)
+                                        }}
+                                        placeholder={`Room ${roomNum} Out`}
+                                        className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs pr-6 bg-amber-50/40"
+                                      />
+                                      <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                        <i className="ti ti-calendar text-xs" />
+                                      </div>
+                                      <input
+                                        type="date"
+                                        className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            const copy = [...makkahHotels]
+                                            const val = formatDateFromPicker(e.target.value)
+                                            copy[i][keyName] = val
+                                            const inVal = copy[i][inKeyName] || copy[i].check_in
+                                            if (inVal && val) {
+                                              const calcN = calculateNightsFromDates(inVal, val)
+                                              if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                            }
+                                            setMakkahHotels(copy)
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">R1 Nights:</span>
+                                )}
+                                <input
+                                  type="number"
+                                  value={h.nights || ''}
+                                  onChange={(e) => {
+                                    const copy = [...makkahHotels]
+                                    const nVal = e.target.value
+                                    copy[i].nights = nVal
+                                    if (nVal && Number(nVal) > 0) {
+                                      if (copy[i].check_in) {
+                                        const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                        if (calcOut) copy[i].check_out = calcOut
+                                      }
+                                    }
+                                    setMakkahHotels(copy)
+                                  }}
+                                  placeholder="Nights"
+                                  className="w-full border rounded px-1.5 py-1 text-xs text-center"
+                                />
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const nightsKeyName = `nights_${roomNum}`
+                                const inKeyName = `check_in_${roomNum}`
+                                const outKeyName = `check_out_${roomNum}`
+                                const currentVal = h[nightsKeyName] || h.nights || ''
+
+                                return (
+                                  <div key={`makkah-extra-nights-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">R{roomNum} Nights:</span>
+                                    <input
+                                      type="number"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...makkahHotels]
+                                        const nVal = e.target.value
+                                        copy[i][nightsKeyName] = nVal
+                                        const inVal = copy[i][inKeyName] || copy[i].check_in
+                                        if (nVal && Number(nVal) > 0 && inVal) {
+                                          const calcOut = calculateCheckoutFromCheckinAndNights(inVal, nVal)
+                                          if (calcOut) copy[i][outKeyName] = calcOut
+                                        }
+                                        setMakkahHotels(copy)
+                                      }}
+                                      placeholder="Nights"
+                                      className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs text-center bg-amber-50/40"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">R1 Price:</span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={h.night_price || ''}
+                                  onChange={(e) => {
+                                    const copy = [...makkahHotels]
+                                    copy[i].night_price = e.target.value
+                                    setMakkahHotels(copy)
+                                  }}
+                                  placeholder="Price"
+                                  className="w-full border rounded px-1.5 py-1 text-xs font-semibold"
+                                />
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const priceKeyName = `night_price_${roomNum}`
+                                const currentVal = h[priceKeyName] || h.night_price || ''
+
+                                return (
+                                  <div key={`makkah-extra-price-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-amber-800 block mb-0.5 uppercase tracking-tight">R{roomNum} Price:</span>
+                                    <input
+                                      type="text"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...makkahHotels]
+                                        copy[i][priceKeyName] = e.target.value
+                                        setMakkahHotels(copy)
+                                      }}
+                                      placeholder="Price"
+                                      className="w-full border border-amber-300 rounded px-1.5 py-1 text-xs font-semibold bg-amber-50/40"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top text-center pt-3">
+                            {makkahHotels.length > 1 && (
+                              <button type="button" onClick={() => removeMakkahRow(i)} className="text-red-500 hover:text-red-700">
+                                <i className="ti ti-trash" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -2657,7 +3040,7 @@ export default function Clients() {
                     <tr>
                       <th className="p-2">HOTEL NAME</th>
                       <th className="p-2 w-16">ROOM QTY</th>
-                      <th className="p-2 w-24">ROOM TYPE</th>
+                      <th className="p-2 w-36">ROOM TYPE</th>
                       <th className="p-2">CHECK IN</th>
                       <th className="p-2">CHECK OUT</th>
                       <th className="p-2 w-16">NIGHTS</th>
@@ -2667,126 +3050,413 @@ export default function Clients() {
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {madinaHotels.map((h, i) => (
-                      <tr key={i}>
-                        <td className="p-2"><input type="text" value={h.hotel_name} onChange={(e) => { const copy = [...madinaHotels]; copy[i].hotel_name = e.target.value; setMadinaHotels(copy) }} placeholder="Hotel Name" className="w-full border rounded px-2 py-1 text-xs" /></td>
-                        <td className="p-2"><input type="number" value={h.room_qty} onChange={(e) => { const copy = [...madinaHotels]; copy[i].room_qty = e.target.value; setMadinaHotels(copy) }} placeholder="Qty" className="w-full border rounded px-1.5 py-1 text-xs text-center" /></td>
-                        <td className="p-2"><input type="text" value={h.room_type} onChange={(e) => { const copy = [...madinaHotels]; copy[i].room_type = e.target.value; setMadinaHotels(copy) }} placeholder="Room Type" className="w-full border rounded px-1.5 py-1 text-xs" /></td>
-                        <td className="p-2">
-                          <div className="relative flex items-center">
+                      <React.Fragment key={`mad-hotel-row-${i}`}>
+                        {Number(h.room_qty) > 1 && (
+                          <tr className="bg-emerald-50/80 border-b border-emerald-200/60">
+                            <td colSpan={8} className="px-3 py-1 text-left">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <label className="flex items-center gap-1.5 cursor-pointer font-bold text-emerald-950">
+                                  <input
+                                    type="checkbox"
+                                    checked={h.same_details_for_all_rooms !== false}
+                                    onChange={(e) => {
+                                      const copy = [...madinaHotels]
+                                      copy[i].same_details_for_all_rooms = e.target.checked
+                                      setMadinaHotels(copy)
+                                    }}
+                                    className="w-3.5 h-3.5 text-emerald-600 rounded cursor-pointer"
+                                  />
+                                  <span>Same Check-In/Out Dates & Night Price for all rooms</span>
+                                </label>
+                                {h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                                    Independent Check-In, Check-Out & Price enabled per room below
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        <tr>
+                          <td className="p-2 align-top">
                             <input
                               type="text"
-                              value={h.check_in}
+                              value={h.hotel_name || ''}
                               onChange={(e) => {
                                 const copy = [...madinaHotels]
-                                const val = e.target.value
-                                copy[i].check_in = val
-                                copy[i].last_edited = 'check_in'
-                                if (val && copy[i].check_out) {
-                                  const calcN = calculateNightsFromDates(val, copy[i].check_out)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
-                                }
+                                copy[i].hotel_name = e.target.value
                                 setMadinaHotels(copy)
                               }}
-                              placeholder="Check In"
-                              className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                              placeholder="Hotel Name"
+                              className="w-full border rounded px-2 py-1 text-xs"
                             />
-                            <div className="absolute right-1.5 pointer-events-none text-gray-400">
-                              <i className="ti ti-calendar text-xs" />
-                            </div>
+                          </td>
+                          <td className="p-2 align-top">
                             <input
-                              type="date"
-                              className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  const copy = [...madinaHotels]
-                                  const val = formatDateFromPicker(e.target.value)
-                                  copy[i].check_in = val
-                                  copy[i].last_edited = 'check_in'
-                                  if (val && copy[i].check_out) {
-                                    const calcN = calculateNightsFromDates(val, copy[i].check_out)
-                                    if (calcN > 0) copy[i].nights = String(calcN)
-                                  }
-                                  setMadinaHotels(copy)
-                                }
-                              }}
-                              title="Select Check In date from calendar"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <div className="relative flex items-center">
-                            <input
-                              type="text"
-                              value={h.check_out}
+                              type="number"
+                              value={h.room_qty || ''}
                               onChange={(e) => {
                                 const copy = [...madinaHotels]
-                                const val = e.target.value
-                                copy[i].check_out = val
-                                copy[i].last_edited = 'check_out'
-                                if (copy[i].check_in && val) {
-                                  const calcN = calculateNightsFromDates(copy[i].check_in, val)
-                                  if (calcN > 0) copy[i].nights = String(calcN)
-                                }
+                                copy[i].room_qty = e.target.value
                                 setMadinaHotels(copy)
                               }}
-                              placeholder="Check Out"
-                              className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                              placeholder="Qty"
+                              className="w-full border rounded px-1.5 py-1 text-xs text-center"
                             />
-                            <div className="absolute right-1.5 pointer-events-none text-gray-400">
-                              <i className="ti ti-calendar text-xs" />
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && (
+                                  <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room 1 Type:</span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={h.room_type || ''}
+                                  onChange={(e) => {
+                                    const copy = [...madinaHotels]
+                                    copy[i].room_type = e.target.value
+                                    setMadinaHotels(copy)
+                                  }}
+                                  placeholder={Number(h.room_qty) > 1 ? "Room 1 Type" : "Room Type"}
+                                  className="w-full border rounded px-1.5 py-1 text-xs font-semibold uppercase bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                />
+                              </div>
+
+                              {Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const extraList = Array.isArray(h.extra_room_types) ? h.extra_room_types : []
+                                const currentVal = extraList[extraIdx] || ''
+
+                                return (
+                                  <div key={`madina-extra-room-${i}-${extraIdx}`} className="animate-in fade-in duration-150">
+                                    <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} Type:</span>
+                                    <input
+                                      type="text"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...madinaHotels]
+                                        const nextExtras = [...(Array.isArray(copy[i].extra_room_types) ? copy[i].extra_room_types : [])]
+                                        nextExtras[extraIdx] = e.target.value
+                                        copy[i].extra_room_types = nextExtras
+                                        setMadinaHotels(copy)
+                                      }}
+                                      placeholder={`Room ${roomNum} Type`}
+                                      className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs font-semibold uppercase bg-emerald-50/50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                  </div>
+                                )
+                              })}
                             </div>
-                            <input
-                              type="date"
-                              className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  const copy = [...madinaHotels]
-                                  const val = formatDateFromPicker(e.target.value)
-                                  copy[i].check_out = val
-                                  copy[i].last_edited = 'check_out'
-                                  if (copy[i].check_in && val) {
-                                    const calcN = calculateNightsFromDates(copy[i].check_in, val)
-                                    if (calcN > 0) copy[i].nights = String(calcN)
-                                  }
-                                  setMadinaHotels(copy)
-                                }
-                              }}
-                              title="Select Check Out date from calendar"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number"
-                            value={h.nights}
-                            onChange={(e) => {
-                              const copy = [...madinaHotels]
-                              const nVal = e.target.value
-                              copy[i].nights = nVal
-                              if (nVal && Number(nVal) > 0) {
-                                if (copy[i].check_in) {
-                                  const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
-                                  if (calcOut) copy[i].check_out = calcOut
-                                } else if (copy[i].check_out) {
-                                  const calcIn = calculateCheckinFromCheckoutAndNights(copy[i].check_out, nVal)
-                                  if (calcIn) copy[i].check_in = calcIn
-                                }
-                              }
-                              setMadinaHotels(copy)
-                            }}
-                            placeholder="Nights"
-                            className="w-full border rounded px-1.5 py-1 text-xs text-center"
-                          />
-                        </td>
-                        <td className="p-2"><input type="text" value={h.night_price} onChange={(e) => { const copy = [...madinaHotels]; copy[i].night_price = e.target.value; setMadinaHotels(copy) }} placeholder="Price" className="w-full border rounded px-1.5 py-1 text-xs font-semibold" /></td>
-                        <td className="p-2 text-center">
-                          {madinaHotels.length > 1 && (
-                            <button type="button" onClick={() => removeMadinaRow(i)} className="text-red-500 hover:text-red-700">
-                              <i className="ti ti-trash" />
-                            </button>
-                          )}
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room 1 In:</span>
+                                )}
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    value={h.check_in || ''}
+                                    onChange={(e) => {
+                                      const copy = [...madinaHotels]
+                                      const val = e.target.value
+                                      copy[i].check_in = val
+                                      if (val && copy[i].check_out) {
+                                        const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                        if (calcN > 0) copy[i].nights = String(calcN)
+                                      }
+                                      setMadinaHotels(copy)
+                                    }}
+                                    placeholder="Check In"
+                                    className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                                  />
+                                  <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                    <i className="ti ti-calendar text-xs" />
+                                  </div>
+                                  <input
+                                    type="date"
+                                    className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const copy = [...madinaHotels]
+                                        const val = formatDateFromPicker(e.target.value)
+                                        copy[i].check_in = val
+                                        if (val && copy[i].check_out) {
+                                          const calcN = calculateNightsFromDates(val, copy[i].check_out)
+                                          if (calcN > 0) copy[i].nights = String(calcN)
+                                        }
+                                        setMadinaHotels(copy)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const keyName = `check_in_${roomNum}`
+                                const outKeyName = `check_out_${roomNum}`
+                                const nightsKeyName = `nights_${roomNum}`
+                                const currentVal = h[keyName] || h.check_in || ''
+
+                                return (
+                                  <div key={`madina-extra-in-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} In:</span>
+                                    <div className="relative flex items-center">
+                                      <input
+                                        type="text"
+                                        value={currentVal}
+                                        onChange={(e) => {
+                                          const copy = [...madinaHotels]
+                                          const val = e.target.value
+                                          copy[i][keyName] = val
+                                          const outVal = copy[i][outKeyName] || copy[i].check_out
+                                          if (val && outVal) {
+                                            const calcN = calculateNightsFromDates(val, outVal)
+                                            if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                          }
+                                          setMadinaHotels(copy)
+                                        }}
+                                        placeholder={`Room ${roomNum} In`}
+                                        className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs pr-6 bg-emerald-50/40"
+                                      />
+                                      <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                        <i className="ti ti-calendar text-xs" />
+                                      </div>
+                                      <input
+                                        type="date"
+                                        className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            const copy = [...madinaHotels]
+                                            const val = formatDateFromPicker(e.target.value)
+                                            copy[i][keyName] = val
+                                            const outVal = copy[i][outKeyName] || copy[i].check_out
+                                            if (val && outVal) {
+                                              const calcN = calculateNightsFromDates(val, outVal)
+                                              if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                            }
+                                            setMadinaHotels(copy)
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room 1 Out:</span>
+                                )}
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    value={h.check_out || ''}
+                                    onChange={(e) => {
+                                      const copy = [...madinaHotels]
+                                      const val = e.target.value
+                                      copy[i].check_out = val
+                                      if (copy[i].check_in && val) {
+                                        const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                        if (calcN > 0) copy[i].nights = String(calcN)
+                                      }
+                                      setMadinaHotels(copy)
+                                    }}
+                                    placeholder="Check Out"
+                                    className="w-full border rounded px-1.5 py-1 text-xs pr-6"
+                                  />
+                                  <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                    <i className="ti ti-calendar text-xs" />
+                                  </div>
+                                  <input
+                                    type="date"
+                                    className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        const copy = [...madinaHotels]
+                                        const val = formatDateFromPicker(e.target.value)
+                                        copy[i].check_out = val
+                                        if (copy[i].check_in && val) {
+                                          const calcN = calculateNightsFromDates(copy[i].check_in, val)
+                                          if (calcN > 0) copy[i].nights = String(calcN)
+                                        }
+                                        setMadinaHotels(copy)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const keyName = `check_out_${roomNum}`
+                                const inKeyName = `check_in_${roomNum}`
+                                const nightsKeyName = `nights_${roomNum}`
+                                const currentVal = h[keyName] || h.check_out || ''
+
+                                return (
+                                  <div key={`madina-extra-out-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">Room {roomNum} Out:</span>
+                                    <div className="relative flex items-center">
+                                      <input
+                                        type="text"
+                                        value={currentVal}
+                                        onChange={(e) => {
+                                          const copy = [...madinaHotels]
+                                          const val = e.target.value
+                                          copy[i][keyName] = val
+                                          const inVal = copy[i][inKeyName] || copy[i].check_in
+                                          if (inVal && val) {
+                                            const calcN = calculateNightsFromDates(inVal, val)
+                                            if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                          }
+                                          setMadinaHotels(copy)
+                                        }}
+                                        placeholder={`Room ${roomNum} Out`}
+                                        className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs pr-6 bg-emerald-50/40"
+                                      />
+                                      <div className="absolute right-1.5 pointer-events-none text-gray-400">
+                                        <i className="ti ti-calendar text-xs" />
+                                      </div>
+                                      <input
+                                        type="date"
+                                        className="absolute right-0 top-0 bottom-0 w-6 opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          if (e.target.value) {
+                                            const copy = [...madinaHotels]
+                                            const val = formatDateFromPicker(e.target.value)
+                                            copy[i][keyName] = val
+                                            const inVal = copy[i][inKeyName] || copy[i].check_in
+                                            if (inVal && val) {
+                                              const calcN = calculateNightsFromDates(inVal, val)
+                                              if (calcN > 0) copy[i][nightsKeyName] = String(calcN)
+                                            }
+                                            setMadinaHotels(copy)
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">R1 Nights:</span>
+                                )}
+                                <input
+                                  type="number"
+                                  value={h.nights || ''}
+                                  onChange={(e) => {
+                                    const copy = [...madinaHotels]
+                                    const nVal = e.target.value
+                                    copy[i].nights = nVal
+                                    if (nVal && Number(nVal) > 0) {
+                                      if (copy[i].check_in) {
+                                        const calcOut = calculateCheckoutFromCheckinAndNights(copy[i].check_in, nVal)
+                                        if (calcOut) copy[i].check_out = calcOut
+                                      }
+                                    }
+                                    setMadinaHotels(copy)
+                                  }}
+                                  placeholder="Nights"
+                                  className="w-full border rounded px-1.5 py-1 text-xs text-center"
+                                />
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const nightsKeyName = `nights_${roomNum}`
+                                const inKeyName = `check_in_${roomNum}`
+                                const outKeyName = `check_out_${roomNum}`
+                                const currentVal = h[nightsKeyName] || h.nights || ''
+
+                                return (
+                                  <div key={`madina-extra-nights-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">R{roomNum} Nights:</span>
+                                    <input
+                                      type="number"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...madinaHotels]
+                                        const nVal = e.target.value
+                                        copy[i][nightsKeyName] = nVal
+                                        const inVal = copy[i][inKeyName] || copy[i].check_in
+                                        if (nVal && Number(nVal) > 0 && inVal) {
+                                          const calcOut = calculateCheckoutFromCheckinAndNights(inVal, nVal)
+                                          if (calcOut) copy[i][outKeyName] = calcOut
+                                        }
+                                        setMadinaHotels(copy)
+                                      }}
+                                      placeholder="Nights"
+                                      className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs text-center bg-emerald-50/40"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top">
+                            <div className="space-y-1.5">
+                              <div>
+                                {Number(h.room_qty) > 1 && h.same_details_for_all_rooms === false && (
+                                  <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">R1 Price:</span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={h.night_price || ''}
+                                  onChange={(e) => {
+                                    const copy = [...madinaHotels]
+                                    copy[i].night_price = e.target.value
+                                    setMadinaHotels(copy)
+                                  }}
+                                  placeholder="Price"
+                                  className="w-full border rounded px-1.5 py-1 text-xs font-semibold"
+                                />
+                              </div>
+
+                              {h.same_details_for_all_rooms === false && Array.from({ length: Math.max(0, (parseInt(h.room_qty, 10) || 1) - 1) }).map((_, extraIdx) => {
+                                const roomNum = extraIdx + 2
+                                const priceKeyName = `night_price_${roomNum}`
+                                const currentVal = h[priceKeyName] || h.night_price || ''
+
+                                return (
+                                  <div key={`madina-extra-price-${i}-${extraIdx}`}>
+                                    <span className="text-[9px] font-bold text-emerald-800 block mb-0.5 uppercase tracking-tight">R{roomNum} Price:</span>
+                                    <input
+                                      type="text"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const copy = [...madinaHotels]
+                                        copy[i][priceKeyName] = e.target.value
+                                        setMadinaHotels(copy)
+                                      }}
+                                      placeholder="Price"
+                                      className="w-full border border-emerald-300 rounded px-1.5 py-1 text-xs font-semibold bg-emerald-50/40"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </td>
+                          <td className="p-2 align-top text-center pt-3">
+                            {madinaHotels.length > 1 && (
+                              <button type="button" onClick={() => removeMadinaRow(i)} className="text-red-500 hover:text-red-700">
+                                <i className="ti ti-trash" />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -3592,7 +4262,7 @@ export default function Clients() {
                 <button
                   type="button"
                   onClick={() => {
-                    const elemId = showDocModal === 'eticket' ? 'eticket-page-0' 
+                    const elemId = showDocModal === 'eticket' ? 'printable-eticket' 
                                  : showDocModal === 'hotel' ? 'printable-hotel-voucher'
                                  : showDocModal === 'transport' ? 'printable-transport-voucher'
                                  : 'printable-all-in-one'
@@ -3760,6 +4430,20 @@ export default function Clients() {
         </div>
       )}
 
+      {/* Ticket Sales Report Modal */}
+      <PackageSalesReportModal
+        isOpen={showSalesReportModal}
+        onClose={() => setShowSalesReportModal(false)}
+        packageData={{
+          header,
+          pax,
+          depFlight: flightItinerary[0] || {},
+          arrFlight: flightItinerary[1] || {},
+          passengerList: passengerList || [],
+          pnr: customPnr || '',
+          comments
+        }}
+      />
     </div>
   )
 }

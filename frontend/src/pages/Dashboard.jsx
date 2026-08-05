@@ -27,6 +27,14 @@ const gdsTools = [
     ready: true,
   },
   {
+    path: '/dummy-bookings',
+    icon: 'ti-ticket',
+    color: 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/60',
+    label: 'Dummy Bookings',
+    desc: 'Generate ViewTrip & Travelport style flight & hotel dummy reservation documents',
+    ready: true,
+  },
+  {
     path: '/fare-calc',
     icon: 'ti-calculator',
     color: 'bg-slate-100 text-slate-400 border border-slate-200',

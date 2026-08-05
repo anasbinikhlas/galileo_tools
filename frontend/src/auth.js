@@ -1,7 +1,7 @@
 const AUTH_STORAGE_KEY = 'galileotools-authenticated'
 const VALID_USER = {
-  email: 'test@example.com',
-  password: 'password',
+  email: 'admin@tas.com',
+  password: 'Superadmin@1995',
 }
 
 export function isAuthenticated() {

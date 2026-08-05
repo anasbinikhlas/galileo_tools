@@ -1,6 +1,132 @@
 import React from 'react'
 import { getActiveCompanyDetails } from '../pages/CompanyDetails'
 
+export function formatHotelRoomTypeSummary(h) {
+  if (!h) return '-'
+  const qty = Math.max(1, parseInt(h.room_qty || h.roomQty || h.qty || '1', 10))
+  const mainType = (h.room_type || h.roomType || h.type || '').trim()
+  const extraTypes = Array.isArray(h.extra_room_types) ? h.extra_room_types : []
+
+  const allTypes = []
+  for (let r = 1; r <= qty; r++) {
+    const t = r === 1
+      ? mainType
+      : (extraTypes[r - 2] || h[`room_type_${r}`] || mainType)
+    if (t && String(t).trim()) {
+      allTypes.push(String(t).trim().toUpperCase())
+    }
+  }
+
+  if (allTypes.length === 0) {
+    return '—'
+  }
+
+  const counts = {}
+  allTypes.forEach(t => {
+    counts[t] = (counts[t] || 0) + 1
+  })
+
+  const uniqueTypes = Object.keys(counts)
+
+  if (uniqueTypes.length === 1) {
+    return uniqueTypes[0]
+  }
+
+  return Object.entries(counts)
+    .map(([type, count]) => `${count} ${type}`)
+    .join(' + ')
+}
+
+
+export function formatHotelNightPriceSummary(h) {
+  if (!h) return '0'
+  const qty = Math.max(1, parseInt(h.room_qty || h.roomQty || h.qty || '1', 10))
+  const mainPrice = h.night_price || h.nightPrice || 0
+
+  const allPrices = []
+  for (let r = 1; r <= qty; r++) {
+    const p = r === 1
+      ? mainPrice
+      : (h[`night_price_${r}`] || mainPrice)
+    allPrices.push(p || 0)
+  }
+
+  const firstPrice = String(allPrices[0])
+  const allSame = allPrices.every(p => String(p) === firstPrice)
+
+  if (allSame) {
+    return firstPrice
+  }
+
+  return allPrices.join(', ')
+}
+
+export function formatHotelNightsSummary(h) {
+  if (!h) return '0'
+  const qty = Math.max(1, parseInt(h.room_qty || h.roomQty || h.qty || '1', 10))
+  const mainNights = h.nights || 0
+
+  const allNights = []
+  for (let r = 1; r <= qty; r++) {
+    const n = r === 1
+      ? mainNights
+      : (h[`nights_${r}`] || mainNights)
+    allNights.push(n || 0)
+  }
+
+  const firstNights = String(allNights[0])
+  const allSame = allNights.every(n => String(n) === firstNights)
+
+  if (allSame) {
+    return firstNights
+  }
+
+  return allNights.join(', ')
+}
+
+export function expandHotelRooms(h) {
+  if (!h) return []
+  const qty = Math.max(1, parseInt(h.room_qty || h.roomQty || h.qty || '1', 10))
+  const sameDetails = h.same_details_for_all_rooms !== false
+
+  if (sameDetails || qty === 1) {
+    return [{
+      ...h,
+      room_number: 1,
+      room_qty_display: qty,
+      room_type_summary: formatHotelRoomTypeSummary(h),
+      display_check_in: h.check_in || h.checkIn || '--',
+      display_check_out: h.check_out || h.checkOut || '--',
+      display_nights: formatHotelNightsSummary(h),
+      display_price: formatHotelNightPriceSummary(h)
+    }]
+  }
+
+  const rooms = []
+  const extraTypes = Array.isArray(h.extra_room_types) ? h.extra_room_types : []
+
+  for (let r = 1; r <= qty; r++) {
+    const rType = r === 1 ? (h.room_type || 'ROOM') : (extraTypes[r - 2] || h[`room_type_${r}`] || h.room_type || 'ROOM')
+    const rIn = r === 1 ? (h.check_in || '--') : (h[`check_in_${r}`] || h.check_in || '--')
+    const rOut = r === 1 ? (h.check_out || '--') : (h[`check_out_${r}`] || h.check_out || '--')
+    const rNights = r === 1 ? (h.nights || 0) : (h[`nights_${r}`] || h.nights || 0)
+    const rPrice = r === 1 ? (h.night_price || 0) : (h[`night_price_${r}`] || h.night_price || 0)
+
+    rooms.push({
+      ...h,
+      room_number: r,
+      room_qty_display: 1,
+      room_type_summary: rType.toUpperCase(),
+      display_check_in: rIn,
+      display_check_out: rOut,
+      display_nights: rNights,
+      display_price: rPrice
+    })
+  }
+
+  return rooms
+}
+
 const BANK_DETAILS_LIST = [
   { title: 'ZUYUFURRAHMAN HAJJ & UMRAH', bankName: 'Askari Bank', accountNo: '0-6201-0057-9277' },
   { title: 'ZUYUFURRAHMAN HAJJ & UMRAH', bankName: 'BankIslami', accountNo: '1024-1054740-0001' },
@@ -33,39 +159,36 @@ export function ColorPdfTemplate({
   companyDetails = null
 }) {
   const safeHeaderSr = String(header?.sr_no || '01')
-  const safeHeaderName = String(header?.name || 'CLIENT')
+  const safeHeaderName = String(header?.name || '')
   const safeHeaderDate = String(header?.date || new Date().toISOString().slice(0, 10))
 
   const company = companyDetails || getActiveCompanyDetails()
 
-  // Build flight rows list
-  const flightsList = Array.isArray(flightItinerary) && flightItinerary.length > 0
+  const rawFlights = Array.isArray(flightItinerary) && flightItinerary.length > 0
     ? flightItinerary
     : [
         { type: 'DEPARTURE', ...(depFlight || {}) },
         { type: 'ARRIVAL', ...(arrFlight || {}) }
-      ].filter(f => f.airline || f.flight_no || f.sector || f.date)
+      ]
 
-  const finalFlights = flightsList.length > 0 ? flightsList : [
-    { type: 'DEPARTURE', airline: '', flight_no: '', sector: '', date: '', dep_time: '', arr_time: '' },
-    { type: 'ARRIVAL', airline: '', flight_no: '', sector: '', date: '', dep_time: '', arr_time: '' }
-  ]
+  const finalFlights = rawFlights.filter(f => f && (f.airline || f.flight_no || f.flightNo || f.sector || f.date || f.dep_time || f.arr_time))
 
-  // Multi-row transport list support
-  const safeTransportList = Array.isArray(transportList) && transportList.length > 0
+  const rawTransport = Array.isArray(transportList) && transportList.length > 0
     ? transportList
     : Array.isArray(transport) && transport.length > 0
       ? transport
-      : [transport || {}]
+      : (transport && (transport.type || transport.sector || transport.price) ? [transport] : [])
 
-  const safeMakkahHotels = Array.isArray(makkahHotels) ? makkahHotels : []
-  const safeMadinaHotels = Array.isArray(madinaHotels) ? madinaHotels : []
+  const safeTransportList = rawTransport.filter(t => t && (t.type || t.sector || t.price || t.qty))
+
+  const safeMakkahHotels = Array.isArray(makkahHotels) ? makkahHotels.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn || h.room_type || h.roomType)) : []
+  const safeMadinaHotels = Array.isArray(madinaHotels) ? madinaHotels.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn || h.room_type || h.roomType)) : []
 
   return (
     <div className="w-full overflow-x-auto max-w-4xl mx-auto p-1 sm:p-2">
       <div id="printable-color-package" className="bg-white text-slate-900 font-sans p-3 sm:p-4 space-y-2.5 rounded-xl border border-slate-200 shadow-sm min-w-[620px] text-left uppercase">
         
-        {/* COMPANY DETAILS TOP HEADER (ADDRESS, LOGO, PHONE, EMAIL, WEBSITE) */}
+        {/* COMPANY DETAILS TOP HEADER */}
         {showCompanyDetails !== false && company && (company.name || company.address || company.logoUrl) && (
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-xl p-3 shadow-md border border-slate-700/80 mb-1 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 text-left">
@@ -96,20 +219,20 @@ export function ColorPdfTemplate({
 
             <div className="text-right text-[10px] space-y-0.5 text-slate-300 border-l border-white/10 pl-3 shrink-0 uppercase font-medium">
               {company.phone && (
-                <div className="flex items-center justify-end gap-1">
-                  <i className="ti ti-phone text-emerald-400 text-xs" />
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-phone text-emerald-400 text-xs shrink-0" />
                   <span>{company.phone}</span>
                 </div>
               )}
               {company.email && (
-                <div className="flex items-center justify-end gap-1">
-                  <i className="ti ti-mail text-emerald-400 text-xs" />
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-mail text-emerald-400 text-xs shrink-0" />
                   <span className="lowercase">{company.email}</span>
                 </div>
               )}
               {company.website && (
-                <div className="flex items-center justify-end gap-1 font-bold text-white">
-                  <i className="ti ti-world text-emerald-400 text-xs" />
+                <div className="flex items-center justify-end gap-1.5 font-bold text-white">
+                  <i className="ti ti-world text-emerald-400 text-xs shrink-0" />
                   <span className="lowercase">{company.website}</span>
                 </div>
               )}
@@ -132,7 +255,7 @@ export function ColorPdfTemplate({
             </div>
             <div className="bg-white/10 backdrop-blur-md rounded-xl px-3 py-1 border border-white/15 text-center min-w-[95px]">
               <span className="block text-[9px] font-bold text-slate-300 uppercase tracking-wider">CLIENT NAME</span>
-              <span className="block text-xs font-extrabold text-white uppercase">{safeHeaderName}</span>
+              <span className="block text-xs font-extrabold text-white uppercase">{safeHeaderName || '-'}</span>
             </div>
             <div className="bg-white/10 backdrop-blur-md rounded-xl px-3 py-1 border border-white/15 text-center min-w-[90px]">
               <span className="block text-[9px] font-bold text-slate-300 uppercase tracking-wider">DATE</span>
@@ -152,17 +275,17 @@ export function ColorPdfTemplate({
           <div className={`grid ${hideBreakup ? 'grid-cols-4' : 'grid-cols-5'} divide-x divide-slate-200 border border-slate-200 rounded-lg text-center bg-white shadow-xs overflow-hidden text-xs`}>
             <div className="p-1.5">
               <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">ADULT (ADT)</span>
-              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.adt ?? '0'}</span>
+              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.adt || '0'}</span>
               {pax?.adt_price && !hideBreakup && <span className="block text-[9px] text-blue-600 font-bold">Fare: {pax.adt_price}</span>}
             </div>
             <div className="p-1.5">
               <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">CHILD</span>
-              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.child ?? '0'}</span>
+              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.child || '0'}</span>
               {pax?.child_price && !hideBreakup && <span className="block text-[9px] text-blue-600 font-bold">Fare: {pax.child_price}</span>}
             </div>
             <div className="p-1.5">
               <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">INFANT</span>
-              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.infant ?? '0'}</span>
+              <span className="block text-xs font-extrabold text-slate-800 mt-0.5">{pax?.infant || '0'}</span>
               {pax?.infant_price && !hideBreakup && <span className="block text-[9px] text-blue-600 font-bold">Fare: {pax.infant_price}</span>}
             </div>
             <div className="p-1.5 bg-blue-50/40">
@@ -178,7 +301,7 @@ export function ColorPdfTemplate({
           </div>
         </div>
 
-        {/* Flight Details (Multi-Line Dynamic Table) */}
+        {/* Flight Details */}
         <div className="space-y-1">
           <div className="bg-blue-50/80 text-blue-900 border-l-4 border-blue-600 rounded-r-lg px-2.5 py-1 flex items-center justify-between font-bold text-[11px] uppercase tracking-wider">
             <div className="flex items-center gap-1.5">
@@ -196,31 +319,37 @@ export function ColorPdfTemplate({
               <div className="col-span-1">DEP / ARR</div>
             </div>
             
-            {finalFlights.map((fl, idx) => {
-              const sectorRaw = typeof fl?.sector === 'string' ? fl.sector.trim() : ''
-              const parts = sectorRaw ? sectorRaw.split(/\s+/) : []
-              const from = parts[0] || '—'
-              const to = parts[1] || ''
+            {finalFlights.length > 0 ? (
+              finalFlights.map((fl, idx) => {
+                const sectorRaw = typeof fl?.sector === 'string' ? fl.sector.trim() : ''
+                const parts = sectorRaw ? sectorRaw.split(/\s+/) : []
+                const from = parts[0] || '—'
+                const to = parts[1] || ''
 
-              return (
-                <div key={`fl-item-${idx}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 last:border-0 text-center items-center font-mono text-[11px]">
-                  <div className="col-span-1 text-center font-sans">
-                    <span className="text-[10px] font-black text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">
-                      {idx + 1}
-                    </span>
+                return (
+                  <div key={`fl-item-${idx}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 last:border-0 text-center items-center font-mono text-[11px]">
+                    <div className="col-span-1 text-center font-sans">
+                      <span className="text-[10px] font-black text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">
+                        {idx + 1}
+                      </span>
+                    </div>
+                    <div className="col-span-1 font-bold text-slate-800">{fl?.airline || '-'}</div>
+                    <div className="col-span-1 text-slate-700">{fl?.flight_no || '-'}</div>
+                    <div className="col-span-2 font-bold text-slate-900 flex items-center justify-center gap-1">
+                      <span>{from}</span>
+                      {to && <span className="text-blue-600">✈</span>}
+                      {to && <span>{to}</span>}
+                    </div>
+                    <div className="col-span-1 text-slate-700">{fl?.date || '-'}</div>
+                    <div className="col-span-1 text-slate-700">{fl?.dep_time || '-'} / {fl?.arr_time || '-'}</div>
                   </div>
-                  <div className="col-span-1 font-bold text-slate-800">{fl?.airline || '-'}</div>
-                  <div className="col-span-1 text-slate-700">{fl?.flight_no || '-'}</div>
-                  <div className="col-span-2 font-bold text-slate-900 flex items-center justify-center gap-1">
-                    <span>{from}</span>
-                    {to && <span className="text-blue-600">✈</span>}
-                    {to && <span>{to}</span>}
-                  </div>
-                  <div className="col-span-1 text-slate-700">{fl?.date || '-'}</div>
-                  <div className="col-span-1 text-slate-700">{fl?.dep_time || '-'} / {fl?.arr_time || '-'}</div>
-                </div>
-              )
-            })}
+                )
+              })
+            ) : (
+              <div className="p-3 text-center text-slate-400 italic text-[11px] normal-case">
+                No flight itinerary details entered.
+              </div>
+            )}
           </div>
         </div>
 
@@ -237,7 +366,7 @@ export function ColorPdfTemplate({
               <div className="text-right px-2.5">{hideBreakup ? '' : 'PRICE (PER VISA)'}</div>
             </div>
             <div className="grid grid-cols-3 p-1.5 items-center font-mono text-[11px]">
-              <div className="px-2.5 font-extrabold text-slate-900 font-sans">{visa?.type || 'VISA'}</div>
+              <div className="px-2.5 font-extrabold text-slate-900 font-sans">{visa?.type || '-'}</div>
               <div className="text-center font-bold text-slate-800">{visa?.qty || '0'}</div>
               <div className="text-right px-2.5 font-bold text-slate-800">{hideBreakup ? '' : (visa?.price || '0')}</div>
             </div>
@@ -260,41 +389,53 @@ export function ColorPdfTemplate({
               <div className="col-span-1 text-right px-2.5">{hideBreakup ? 'NIGHTS' : 'NIGHTS / RATE'}</div>
             </div>
 
-            {safeMakkahHotels.map((h, i) => (
-              <div key={`col-mak-${i}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 text-center items-center font-mono text-[11px]">
-                <div className="col-span-2 text-left px-2.5 font-sans">
-                  <span className="block font-black text-slate-900 text-[11px] uppercase">{h?.hotel_name || '-'}</span>
-                  <span className="text-[9px] text-amber-600 font-bold">Makkah Hotel</span>
-                </div>
-                <div className="col-span-1 font-bold text-slate-800">{h?.room_qty || '—'}</div>
-                <div className="col-span-1 font-bold text-slate-800">{h?.room_type || '—'}</div>
-                <div className="col-span-1 text-slate-700">{h?.check_in || '—'}</div>
-                <div className="col-span-1 text-slate-700">{h?.check_out || '—'}</div>
-                <div className="col-span-1 text-right px-2.5 font-extrabold text-slate-900">
-                  {h?.nights || '0'} {hideBreakup ? 'Nights' : `/ ${h?.night_price || '0'}`}
-                </div>
+            {safeMakkahHotels.length === 0 && safeMadinaHotels.length === 0 ? (
+              <div className="p-3 text-center text-slate-400 italic text-[11px] normal-case">
+                No hotel accommodation details entered.
               </div>
-            ))}
+            ) : (
+              <>
+                {safeMakkahHotels.flatMap(h => expandHotelRooms(h)).map((rm, i) => (
+                  <div key={`col-mak-${i}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 text-center items-center font-mono text-[11px]">
+                    <div className="col-span-2 text-left px-2.5 font-sans">
+                      <span className="block font-black text-slate-900 text-[11px] uppercase">{rm?.hotel_name || '-'}</span>
+                      <span className="text-[9px] text-amber-600 font-bold">
+                        Makkah Hotel {rm.room_qty_display === 1 && rm.room_number ? `(RM ${rm.room_number})` : ''}
+                      </span>
+                    </div>
+                    <div className="col-span-1 font-bold text-slate-800">{rm?.room_qty_display || '—'}</div>
+                    <div className="col-span-1 font-bold text-slate-800">{rm.room_type_summary}</div>
+                    <div className="col-span-1 text-slate-700">{rm?.display_check_in || '—'}</div>
+                    <div className="col-span-1 text-slate-700">{rm?.display_check_out || '—'}</div>
+                    <div className="col-span-1 text-right px-2.5 font-extrabold text-slate-900">
+                      {rm?.display_nights} {hideBreakup ? 'Nights' : `/ ${rm?.display_price}`}
+                    </div>
+                  </div>
+                ))}
 
-            {safeMadinaHotels.map((h, i) => (
-              <div key={`col-med-${i}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 last:border-0 text-center items-center font-mono text-[11px]">
-                <div className="col-span-2 text-left px-2.5 font-sans">
-                  <span className="block font-black text-slate-900 text-[11px] uppercase">{h?.hotel_name || '-'}</span>
-                  <span className="text-[9px] text-emerald-600 font-bold">Madina Hotel</span>
-                </div>
-                <div className="col-span-1 font-bold text-slate-800">{h?.room_qty || '—'}</div>
-                <div className="col-span-1 font-bold text-slate-800">{h?.room_type || '—'}</div>
-                <div className="col-span-1 text-slate-700">{h?.check_in || '—'}</div>
-                <div className="col-span-1 text-slate-700">{h?.check_out || '—'}</div>
-                <div className="col-span-1 text-right px-2.5 font-extrabold text-slate-900">
-                  {h?.nights || '0'} {hideBreakup ? 'Nights' : `/ ${h?.night_price || '0'}`}
-                </div>
-              </div>
-            ))}
+                {safeMadinaHotels.flatMap(h => expandHotelRooms(h)).map((rm, i) => (
+                  <div key={`col-med-${i}`} className="grid grid-cols-7 p-1.5 border-b border-slate-100 last:border-0 text-center items-center font-mono text-[11px]">
+                    <div className="col-span-2 text-left px-2.5 font-sans">
+                      <span className="block font-black text-slate-900 text-[11px] uppercase">{rm?.hotel_name || '-'}</span>
+                      <span className="text-[9px] text-emerald-600 font-bold">
+                        Madina Hotel {rm.room_qty_display === 1 && rm.room_number ? `(RM ${rm.room_number})` : ''}
+                      </span>
+                    </div>
+                    <div className="col-span-1 font-bold text-slate-800">{rm?.room_qty_display || '—'}</div>
+                    <div className="col-span-1 font-bold text-slate-800">{rm.room_type_summary}</div>
+                    <div className="col-span-1 text-slate-700">{rm?.display_check_in || '—'}</div>
+                    <div className="col-span-1 text-slate-700">{rm?.display_check_out || '—'}</div>
+                    <div className="col-span-1 text-right px-2.5 font-extrabold text-slate-900">
+                      {rm?.display_nights} {hideBreakup ? 'Nights' : `/ ${rm?.display_price}`}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </div>
 
-        {/* Transportation Details (Supports Multi-row transport) */}
+        {/* Transportation Details */}
         <div className="space-y-1">
           <div className="bg-blue-50/80 text-blue-900 border-l-4 border-blue-600 rounded-r-lg px-2.5 py-1 flex items-center gap-1.5 font-bold text-[11px] uppercase tracking-wider">
             <i className="ti ti-car text-blue-600 text-sm" />
@@ -307,14 +448,20 @@ export function ColorPdfTemplate({
               <div className="px-2.5">SECTOR / ROUTE</div>
               <div className="text-right px-2.5">{hideBreakup ? '' : 'PRICE'}</div>
             </div>
-            {safeTransportList.map((t, idx) => (
-              <div key={`col-trans-${idx}`} className="grid grid-cols-4 p-1.5 items-center font-mono text-[11px]">
-                <div className="px-2.5 font-extrabold text-slate-900 font-sans">{t?.type || 'BY CAR'}</div>
-                <div className="text-center font-bold text-slate-800">{t?.qty || '1'}</div>
-                <div className="px-2.5 text-slate-800 font-bold">{t?.sector || 'JED ARPT - MAK - MED'}</div>
-                <div className="text-right px-2.5 font-bold text-slate-800">{hideBreakup ? '' : (t?.price || '—')}</div>
+            {safeTransportList.length > 0 ? (
+              safeTransportList.map((t, idx) => (
+                <div key={`col-trans-${idx}`} className="grid grid-cols-4 p-1.5 items-center font-mono text-[11px]">
+                  <div className="px-2.5 font-extrabold text-slate-900 font-sans">{t?.type || '-'}</div>
+                  <div className="text-center font-bold text-slate-800">{t?.qty || '1'}</div>
+                  <div className="px-2.5 text-slate-800 font-bold">{t?.sector || '-'}</div>
+                  <div className="text-right px-2.5 font-bold text-slate-800">{hideBreakup ? '' : (t?.price || '—')}</div>
+                </div>
+              ))
+            ) : (
+              <div className="p-3 text-center text-slate-400 italic text-[11px] normal-case">
+                No transportation sector details entered.
               </div>
-            ))}
+            )}
           </div>
         </div>
 
@@ -374,23 +521,25 @@ export function StandardPdfTemplate({
   comments = '',
   hideBreakup = false
 }) {
-  const flightsList = Array.isArray(flightItinerary) && flightItinerary.length > 0
+  const rawFlights = Array.isArray(flightItinerary) && flightItinerary.length > 0
     ? flightItinerary
     : [
         { type: 'DEPARTURE', ...(depFlight || {}) },
         { type: 'ARRIVAL', ...(arrFlight || {}) }
-      ].filter(f => f.airline || f.flight_no || f.sector || f.date)
+      ]
 
-  const finalFlights = flightsList.length > 0 ? flightsList : [
-    { type: 'DEPARTURE', airline: '', flight_no: '', sector: '', date: '', dep_time: '', arr_time: '' },
-    { type: 'ARRIVAL', airline: '', flight_no: '', sector: '', date: '', dep_time: '', arr_time: '' }
-  ]
+  const finalFlights = rawFlights.filter(f => f && (f.airline || f.flight_no || f.flightNo || f.sector || f.date))
 
-  const safeTransportList = Array.isArray(transportList) && transportList.length > 0
+  const rawTransport = Array.isArray(transportList) && transportList.length > 0
     ? transportList
     : Array.isArray(transport) && transport.length > 0
       ? transport
-      : [transport || {}]
+      : (transport && (transport.type || transport.sector || transport.price) ? [transport] : [])
+
+  const safeTransportList = rawTransport.filter(t => t && (t.type || t.sector || t.price || t.qty))
+
+  const safeMakkahHotels = Array.isArray(makkahHotels) ? makkahHotels.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn)) : []
+  const safeMadinaHotels = Array.isArray(madinaHotels) ? madinaHotels.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn)) : []
 
   return (
     <div className="w-full overflow-x-auto max-w-4xl mx-auto p-1 sm:p-2">
@@ -443,18 +592,24 @@ export function StandardPdfTemplate({
           <div className="p-1 col-span-1">DEP / ARR</div>
         </div>
         
-        {finalFlights.map((fl, idx) => (
-          <div key={`std-fl-${idx}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
-            <div className="p-1.5 font-bold bg-gray-50 col-span-1">
-              {idx + 1}
+        {finalFlights.length > 0 ? (
+          finalFlights.map((fl, idx) => (
+            <div key={`std-fl-${idx}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
+              <div className="p-1.5 font-bold bg-gray-50 col-span-1">
+                {idx + 1}
+              </div>
+              <div className="p-1.5 col-span-1">{fl.airline || '-'}</div>
+              <div className="p-1.5 col-span-1">{fl.flight_no || '-'}</div>
+              <div className="p-1.5 col-span-2 font-bold">{fl.sector || '-'}</div>
+              <div className="p-1.5 col-span-1">{fl.date || '-'}</div>
+              <div className="p-1.5 col-span-1">{fl.dep_time || '-'} / {fl.arr_time || '-'}</div>
             </div>
-            <div className="p-1.5 col-span-1">{fl.airline || '-'}</div>
-            <div className="p-1.5 col-span-1">{fl.flight_no || '-'}</div>
-            <div className="p-1.5 col-span-2 font-bold">{fl.sector || '-'}</div>
-            <div className="p-1.5 col-span-1">{fl.date || '-'}</div>
-            <div className="p-1.5 col-span-1">{fl.dep_time || '-'} / {fl.arr_time || '-'}</div>
+          ))
+        ) : (
+          <div className="p-3 text-center text-gray-500 italic text-[11px] border-b border-black font-sans">
+            No flight itinerary details entered.
           </div>
-        ))}
+        )}
 
         {/* Visa Details */}
         <div className="bg-gray-200 text-center p-1.5 font-bold border-b border-black text-[11px] uppercase">
@@ -483,26 +638,39 @@ export function StandardPdfTemplate({
           <div className="p-1 col-span-1">CHECK OUT</div>
           <div className="p-1 col-span-1">{hideBreakup ? 'NIGHTS' : 'NIGHTS / RATE'}</div>
         </div>
-        {(Array.isArray(makkahHotels) ? makkahHotels : []).map((h, i) => (
-          <div key={`p-mak-${i}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
-            <div className="p-1.5 col-span-2 font-bold text-left px-2">MAKKAH: {h.hotel_name || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.room_qty || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.room_type || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.check_in || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.check_out || '-'}</div>
-            <div className="p-1.5 col-span-1 font-bold">{h.nights || 0} {hideBreakup ? 'Nights' : `/ ${h.night_price || 0}`}</div>
+
+        {safeMakkahHotels.length === 0 && safeMadinaHotels.length === 0 ? (
+          <div className="p-3 text-center text-gray-500 italic text-[11px] border-b border-black font-sans">
+            No hotel accommodation details entered.
           </div>
-        ))}
-        {(Array.isArray(madinaHotels) ? madinaHotels : []).map((h, i) => (
-          <div key={`p-med-${i}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
-            <div className="p-1.5 col-span-2 font-bold text-left px-2">MADINA: {h.hotel_name || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.room_qty || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.room_type || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.check_in || '-'}</div>
-            <div className="p-1.5 col-span-1">{h.check_out || '-'}</div>
-            <div className="p-1.5 col-span-1 font-bold">{h.nights || 0} {hideBreakup ? 'Nights' : `/ ${h.night_price || 0}`}</div>
-          </div>
-        ))}
+        ) : (
+          <>
+            {safeMakkahHotels.flatMap(h => expandHotelRooms(h)).map((rm, i) => (
+              <div key={`p-mak-${i}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
+                <div className="p-1.5 col-span-2 font-bold text-left px-2">
+                  MAKKAH: {rm.hotel_name || '-'} {rm.room_qty_display === 1 && rm.room_number ? `(RM ${rm.room_number})` : ''}
+                </div>
+                <div className="p-1.5 col-span-1">{rm.room_qty_display || '-'}</div>
+                <div className="p-1.5 col-span-1">{rm.room_type_summary}</div>
+                <div className="p-1.5 col-span-1">{rm.display_check_in || '-'}</div>
+                <div className="p-1.5 col-span-1">{rm.display_check_out || '-'}</div>
+                <div className="p-1.5 col-span-1 font-bold">{rm.display_nights} {hideBreakup ? 'Nights' : `/ ${rm.display_price}`}</div>
+              </div>
+            ))}
+            {safeMadinaHotels.flatMap(h => expandHotelRooms(h)).map((rm, i) => (
+              <div key={`p-med-${i}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
+                <div className="p-1.5 col-span-2 font-bold text-left px-2">
+                  MADINA: {rm.hotel_name || '-'} {rm.room_qty_display === 1 && rm.room_number ? `(RM ${rm.room_number})` : ''}
+                </div>
+                <div className="p-1.5 col-span-1">{rm.room_qty_display || '-'}</div>
+                <div className="p-1.5 col-span-1">{rm.room_type_summary}</div>
+                <div className="p-1.5 col-span-1">{rm.display_check_in || '-'}</div>
+                <div className="p-1.5 col-span-1">{rm.display_check_out || '-'}</div>
+                <div className="p-1.5 col-span-1 font-bold">{rm.display_nights} {hideBreakup ? 'Nights' : `/ ${rm.display_price}`}</div>
+              </div>
+            ))}
+          </>
+        )}
 
         {/* Transport Details */}
         <div className="bg-gray-200 text-center p-1.5 font-bold border-b border-black text-[11px] uppercase">
@@ -514,14 +682,20 @@ export function StandardPdfTemplate({
           <div className="p-1 col-span-3">SECTOR</div>
           <div className="p-1 col-span-1">{hideBreakup ? '' : 'PRICE'}</div>
         </div>
-        {safeTransportList.map((t, idx) => (
-          <div key={`p-trans-${idx}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
-            <div className="p-1.5 col-span-2 font-bold">{t.type || '-'}</div>
-            <div className="p-1.5 col-span-1">{t.qty || '-'}</div>
-            <div className="p-1.5 col-span-3">{t.sector || '-'}</div>
-            <div className="p-1.5 col-span-1 font-bold">{hideBreakup ? '' : (t.price || '-')}</div>
+        {safeTransportList.length > 0 ? (
+          safeTransportList.map((t, idx) => (
+            <div key={`p-trans-${idx}`} className="grid grid-cols-7 divide-x divide-black border-b border-black text-center text-[11px]">
+              <div className="p-1.5 col-span-2 font-bold">{t.type || '-'}</div>
+              <div className="p-1.5 col-span-1">{t.qty || '-'}</div>
+              <div className="p-1.5 col-span-3">{t.sector || '-'}</div>
+              <div className="p-1.5 col-span-1 font-bold">{hideBreakup ? '' : (t.price || '-')}</div>
+            </div>
+          ))
+        ) : (
+          <div className="p-3 text-center text-gray-500 italic text-[11px] border-b border-black font-sans">
+            No transportation sector details entered.
           </div>
-        ))}
+        )}
 
         {/* Package Totals */}
         <div className="bg-gray-200 text-center p-1.5 font-bold border-b border-black text-[11px] uppercase">
@@ -548,10 +722,10 @@ export function StandardPdfTemplate({
 }
 
 export function InvoicePdfTemplate({
-  invoiceNo = 'INV-001',
+  invoiceNo = '',
   invoiceDate = new Date().toISOString().slice(0, 10),
   dueDate = '',
-  clientName = 'CLIENT NAME',
+  clientName = '',
   phone = '',
   whatsapp = '',
   email = '',
@@ -572,14 +746,13 @@ export function InvoicePdfTemplate({
   remarks = '',
   hideBreakup = false
 }) {
-  const safePassengers = Array.isArray(ticketPassengers) ? ticketPassengers : []
-  const safeVisas = Array.isArray(visaPassengers) ? visaPassengers : []
-  const safeHotels = Array.isArray(hotelItems) ? hotelItems : []
-  const safeTransports = Array.isArray(transportItems) ? transportItems : []
-  const safeItems = Array.isArray(items) ? items : []
-  const safePayments = Array.isArray(payments) ? payments : []
+  const safePassengers = Array.isArray(ticketPassengers) ? ticketPassengers.filter(p => p && (p.passengerName || p.name || p.ticketNo || p.sector)) : []
+  const safeVisas = Array.isArray(visaPassengers) ? visaPassengers.filter(v => v && (v.passengerName || v.pax || v.visaType || v.type)) : []
+  const safeHotels = Array.isArray(hotelItems) ? hotelItems.filter(h => h && (h.hotelName || h.description || h.checkIn)) : []
+  const safeTransports = Array.isArray(transportItems) ? transportItems.filter(t => t && (t.vehicleType || t.description || t.sector)) : []
+  const safeItems = Array.isArray(items) ? items.filter(i => i && (i.description || i.remarks || i.amount)) : []
+  const safePayments = Array.isArray(payments) ? payments.filter(p => p && (p.voucherNo || p.amount)) : []
 
-  // Computed section totals
   const ticketTotalSum = safePassengers.reduce((sum, p) => sum + Number(p.amount || 0), 0)
   const visaTotalSum = safeVisas.reduce((sum, v) => sum + Number(v.amount || 0), 0)
   const hotelTotalSum = safeHotels.reduce((sum, h) => sum + Number(h.amount || 0), 0)
@@ -588,7 +761,6 @@ export function InvoicePdfTemplate({
 
   const grandSalesTotal = Number(totalAmount) || (ticketTotalSum + visaTotalSum + hotelTotalSum + transportTotalSum + generalTotalSum - Number(discount || 0))
 
-  // Check if at least one passenger has a non-empty ticket number
   const hasTicketNumbers = safePassengers.some(p => p.ticketNo && p.ticketNo.trim() !== '' && p.ticketNo.trim() !== '-')
   const ticketSpanCols = hasTicketNumbers ? 3 : 2
 
@@ -620,11 +792,11 @@ export function InvoicePdfTemplate({
         <div className="bg-gray-100 p-2.5 rounded-lg border border-gray-200 flex items-center justify-between font-mono">
           <div>
             <span className="text-[10px] font-bold text-gray-500 uppercase block">BILLED ACCOUNT CLIENT</span>
-            <span className="text-sm font-black text-gray-900 font-sans">{clientName || 'GUEST CLIENT'}</span>
+            <span className="text-sm font-black text-gray-900 font-sans">{clientName || '-'}</span>
           </div>
           <div className="text-right">
             <span className="text-[10px] font-bold text-gray-500 uppercase block">STATEMENT / INVOICE #</span>
-            <span className="text-xs font-extrabold text-blue-900">{invoiceNo}</span>
+            <span className="text-xs font-extrabold text-blue-900">{invoiceNo || '-'}</span>
           </div>
         </div>
 
@@ -673,7 +845,7 @@ export function InvoicePdfTemplate({
           </div>
         )}
 
-        {/* 2. VISA SECTION (ALL PASSENGER NAMES WITH VISA TYPE) */}
+        {/* 2. VISA SECTION */}
         {safeVisas.length > 0 && (
           <div className="space-y-1">
             <div className="bg-gray-200 text-gray-900 px-3 py-1 font-bold text-[11px] uppercase tracking-wide border-b border-gray-400 flex items-center justify-between">
@@ -694,8 +866,8 @@ export function InvoicePdfTemplate({
                 {safeVisas.map((v, idx) => (
                   <tr key={`visa-pass-${idx}`} className="hover:bg-gray-50">
                     <td className="p-1.5 text-gray-600">{v.date || invoiceDate}</td>
-                    <td className="p-1.5 font-black text-gray-900 font-sans">{v.passengerName || v.pax || clientName}</td>
-                    <td className="p-1.5 font-bold text-emerald-900">{v.visaType || v.type || 'UMRAH VISA'}</td>
+                    <td className="p-1.5 font-black text-gray-900 font-sans">{v.passengerName || v.pax || clientName || '-'}</td>
+                    <td className="p-1.5 font-bold text-emerald-900">{v.visaType || v.type || 'VISA'}</td>
                     {!hideBreakup && (
                       <td className="p-1.5 text-right font-black text-gray-900">
                         {Number(v.amount || 0).toLocaleString()}
@@ -716,7 +888,7 @@ export function InvoicePdfTemplate({
           </div>
         )}
 
-        {/* 3. HOTEL SECTION (HOTEL NAME & ROOM DETAILS - NO PASSENGER NAMES) */}
+        {/* 3. HOTEL SECTION */}
         {safeHotels.length > 0 && (
           <div className="space-y-1">
             <div className="bg-gray-200 text-gray-900 px-3 py-1 font-bold text-[11px] uppercase tracking-wide border-b border-gray-400 flex items-center justify-between">
@@ -739,7 +911,7 @@ export function InvoicePdfTemplate({
                   <tr key={`hotel-item-${idx}`} className="hover:bg-gray-50">
                     <td className="p-1.5 text-gray-600">{h.date || invoiceDate}</td>
                     <td className="p-1.5 font-bold text-gray-900 font-sans">
-                      {h.hotelName || h.description || 'HOTEL ACCOMMODATION'}
+                      {h.hotelName || h.description || '-'}
                       {h.roomType ? ` (${h.roomQty || 1} x ${h.roomType})` : ''}
                     </td>
                     <td className="p-1.5 text-center text-gray-700">{h.checkIn && h.checkOut ? `${h.checkIn} - ${h.checkOut}` : '-'}</td>
@@ -764,7 +936,7 @@ export function InvoicePdfTemplate({
           </div>
         )}
 
-        {/* 4. TRANSPORT SECTION (SECTOR & VEHICLE TYPE ONLY - NO PASSENGER NAMES) */}
+        {/* 4. TRANSPORT SECTION */}
         {safeTransports.length > 0 && (
           <div className="space-y-1">
             <div className="bg-gray-200 text-gray-900 px-3 py-1 font-bold text-[11px] uppercase tracking-wide border-b border-gray-400 flex items-center justify-between">
@@ -786,7 +958,7 @@ export function InvoicePdfTemplate({
                   <tr key={`trans-item-${idx}`} className="hover:bg-gray-50">
                     <td className="p-1.5 text-gray-600">{t.date || invoiceDate}</td>
                     <td className="p-1.5 font-bold text-gray-900 font-sans">
-                      {t.vehicleType || t.description || 'TRANSPORTATION SERVICES'} {t.sector ? ` (${t.sector})` : ''}
+                      {t.vehicleType || t.description || '-'} {t.sector ? ` (${t.sector})` : ''}
                     </td>
                     <td className="p-1.5 text-center font-bold">{t.qty || 1}</td>
                     {!hideBreakup && (
@@ -809,7 +981,7 @@ export function InvoicePdfTemplate({
           </div>
         )}
 
-        {/* 5. GENERAL / OTHER BOOKING SECTION (Fallback items) */}
+        {/* 5. GENERAL / OTHER BOOKING SECTION */}
         {safeItems.length > 0 && (
           <div className="space-y-1">
             <div className="bg-gray-200 text-gray-900 px-3 py-1 font-bold text-[11px] uppercase tracking-wide border-b border-gray-400 flex items-center justify-between">
@@ -831,7 +1003,7 @@ export function InvoicePdfTemplate({
                 {safeItems.map((item, idx) => (
                   <tr key={`gen-item-${idx}`} className="hover:bg-gray-50">
                     <td className="p-1.5 text-gray-600">{item.date || invoiceDate}</td>
-                    <td className="p-1.5 font-bold text-gray-800 font-sans">{item.pax || clientName}</td>
+                    <td className="p-1.5 font-bold text-gray-800 font-sans">{item.pax || clientName || '-'}</td>
                     <td className="p-1.5 font-bold text-gray-900 font-sans">{item.description || item.remarks || '-'}</td>
                     <td className="p-1.5 text-gray-600">{item.txnDate || invoiceDate}</td>
                     {!hideBreakup && (
@@ -854,7 +1026,7 @@ export function InvoicePdfTemplate({
           </div>
         )}
 
-        {/* 3. VOUCHERS / RECEIPTS SECTION (Payments Received) */}
+        {/* 3. VOUCHERS / RECEIPTS SECTION */}
         <div className="space-y-1">
           <div className="bg-gray-200 text-gray-900 px-3 py-1 font-bold text-[11px] uppercase tracking-wide border-b border-gray-400 flex items-center justify-between">
             <span>Vouchers / Payments Received</span>
@@ -904,15 +1076,21 @@ export function InvoicePdfTemplate({
           </table>
         </div>
 
-        {/* 4. NET BALANCE STATEMENT SUMMARY BOX (Exact match to Travelport layout) */}
+        {/* 4. NET BALANCE STATEMENT SUMMARY BOX */}
         <div className="flex justify-end pt-2">
           <div className="w-full sm:w-80 border border-gray-400 rounded-lg overflow-hidden bg-white text-xs font-mono">
             <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-gray-600 font-bold">
-              <span>Opening Balance B/F</span>
-              <span>0.0</span>
+              <span>Subtotal Amount</span>
+              <span>{Number(subtotal || (grandSalesTotal + Number(discount || 0))).toLocaleString()}</span>
             </div>
-            <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-gray-900 font-bold">
-              <span>Add Sale Invoices</span>
+            {Number(discount || 0) > 0 && (
+              <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-amber-800 font-bold bg-amber-50/50">
+                <span>Less Discount</span>
+                <span>- {Number(discount).toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-gray-900 font-black">
+              <span>Net Total Amount</span>
               <span>{grandSalesTotal.toLocaleString()}</span>
             </div>
             <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-emerald-800 font-bold">
@@ -938,7 +1116,7 @@ export function InvoicePdfTemplate({
           <span>Page 1 of 2</span>
         </div>
 
-        {/* ── PAGE 2: OFFICIAL BANK ACCOUNT DETAILS ── */}
+        {/* PAGE 2: OFFICIAL BANK ACCOUNT DETAILS */}
         <div 
           className="pt-6 border-t-2 border-dashed border-gray-300 space-y-4 print:pt-4"
           style={{ pageBreakBefore: 'always', breakBefore: 'page' }}
@@ -1005,7 +1183,7 @@ export function InvoicePdfTemplate({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🎫 E-TICKET PASSENGER ITINERARY TEMPLATE (ID 420)
+// 🎫 E-TICKET PASSENGER ITINERARY TEMPLATE
 // ─────────────────────────────────────────────────────────────────────────────
 export function ETicketPdfTemplate({
   companyDetails = null,
@@ -1016,35 +1194,51 @@ export function ETicketPdfTemplate({
   passengerList = [],
   pnr = '',
   issueDate = '',
-  mode = 'grouped' // 'grouped' or 'separate'
+  mode = 'grouped'
 }) {
   const company = companyDetails || getActiveCompanyDetails()
-  const safeHeaderName = String(header?.name || 'PASSENGER / CLIENT')
+  const safeHeaderName = String(header?.name || '')
   const safeHeaderDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
   const pnrFromFlight = Array.isArray(flightItinerary) ? flightItinerary.find(f => f?.pnr)?.pnr : ''
-  const safePnr = String(pnr || header?.pnr || pnrFromFlight || 'PNR-CONFIRMED').toUpperCase()
+  const safePnr = String(pnr || header?.pnr || pnrFromFlight || '').toUpperCase()
 
-  // Format flight list
-  const flights = Array.isArray(flightItinerary) && flightItinerary.length > 0
-    ? flightItinerary
-    : [
-        { type: 'DEPARTURE', airline: 'SV', flight_no: '701', sector: 'KHI - JED', date: '05 MAR 2026', dep_time: '09:20', arr_time: '11:15', class_type: 'Y', baggage: '30KG' },
-        { type: 'RETURN', airline: 'SV', flight_no: '702', sector: 'JED - KHI', date: '20 MAR 2026', dep_time: '14:30', arr_time: '20:10', class_type: 'Y', baggage: '30KG' }
-      ]
+  const rawFlights = Array.isArray(flightItinerary) ? flightItinerary : []
+  const flights = rawFlights.filter(f => f && (f.airline || f.flight_no || f.flightNo || f.sector || f.date || f.dep_time || f.arr_time))
 
-  // Format passenger list
-  const rawPaxList = Array.isArray(passengerList) && passengerList.length > 0
-    ? passengerList
-    : [safeHeaderName]
+  let initialPaxList = Array.isArray(passengerList) && passengerList.length > 0
+    ? passengerList.filter(p => typeof p === 'string' ? p.trim() !== '' : (p && (p.name || p.passengerName)))
+    : (safeHeaderName ? [safeHeaderName] : [])
+
+  // If initialPaxList has a single string with GDS names like "1.1NAME1 2.1NAME2" or slashes, split them
+  let splitPaxList = []
+  initialPaxList.forEach(item => {
+    const sName = typeof item === 'string' ? item : (item.name || item.passengerName || '')
+    if (typeof sName === 'string' && /\d+\.\d+/.test(sName)) {
+      const parts = sName.split(/(?=\d+\.\d+)/).map(p => p.replace(/^\d+\.\d+/, '').trim()).filter(Boolean)
+      if (parts.length > 1) {
+        splitPaxList.push(...parts)
+        return
+      }
+    }
+    splitPaxList.push(item)
+  })
 
   const adtCount = Number(pax?.adt || 0)
   const childCount = Number(pax?.child || 0)
   const infantCount = Number(pax?.infant || 0)
+  const expectedTotalPax = Math.max(1, adtCount + childCount + infantCount)
 
-  const formattedPassengers = rawPaxList.map((p, idx) => {
+  // Expand list if expectedTotalPax is greater than current pax count
+  let fullPaxList = [...splitPaxList]
+  if (expectedTotalPax > fullPaxList.length) {
+    for (let i = fullPaxList.length + 1; i <= expectedTotalPax; i++) {
+      fullPaxList.push(`PASSENGER ${i}`)
+    }
+  }
+
+  const formattedPassengers = fullPaxList.map((p, idx) => {
     const pName = typeof p === 'string' ? p : (p.name || p.passengerName || safeHeaderName)
     
-    // Determine passenger type (ADT, CHD, INF)
     let pType = 'ADT'
     if (typeof p === 'object' && p !== null && (p.type || p.passengerType)) {
       pType = p.type || p.passengerType
@@ -1078,13 +1272,14 @@ export function ETicketPdfTemplate({
   const hasAnyTicket = formattedPassengers.some(p => p.ticket_no && p.ticket_no.trim() !== '')
 
   const renderSingleTicket = (singlePax = null, ticketIndex = 0, isPageBreak = false) => {
-    const activePaxName = singlePax ? (singlePax.name || singlePax) : safeHeaderName
+    const activePaxName = singlePax ? (singlePax.name || singlePax) : (safeHeaderName || '-')
     const activeTicketNo = (singlePax?.ticket_no || singlePax?.ticketNo || header?.ticket_no || '').trim()
 
     return (
       <div 
         key={`eticket-page-${ticketIndex}`}
-        className={`bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm uppercase ${isPageBreak ? 'print:pt-6' : ''}`}
+        id={`eticket-page-${ticketIndex}`}
+        className={`bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-2xl border border-slate-300 shadow-sm uppercase ${isPageBreak ? 'print:pt-6' : ''}`}
         style={isPageBreak ? { pageBreakBefore: 'always', breakBefore: 'page' } : {}}
       >
         {/* Company Header */}
@@ -1092,99 +1287,128 @@ export function ETicketPdfTemplate({
           <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-xl p-3.5 shadow-md border border-slate-700 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {company.logoUrl ? (
-                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+                <img src={company.logoUrl} alt={company.name} className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-1 shadow-sm shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xl">
-                  ✈️
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-md border border-white/20 shrink-0">
+                  <i className="ti ti-plane text-xl text-white" />
                 </div>
               )}
-              <div>
-                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+              <div className="space-y-0.5">
+                <h1 className="text-base sm:text-lg font-black text-white leading-tight uppercase tracking-tight">
                   {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
                 </h1>
-                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
-                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold tracking-wide uppercase">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium leading-none uppercase">{company.address}</p>}
               </div>
             </div>
-            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
-              {company.phone && <div>📞 {company.phone}</div>}
-              {company.email && <div>✉️ {company.email}</div>}
-              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            <div className="text-right text-[10px] space-y-1 text-slate-300 font-medium border-l border-white/10 pl-3.5 shrink-0 uppercase">
+              {company.phone && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-phone text-emerald-400 text-xs shrink-0" />
+                  <span>{company.phone}</span>
+                </div>
+              )}
+              {company.email && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-mail text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.email}</span>
+                </div>
+              )}
+              {company.website && (
+                <div className="flex items-center justify-end gap-1.5 font-bold text-white">
+                  <i className="ti ti-world text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.website}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Title Banner */}
-        <div className="bg-indigo-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
-          <div>
-            <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
-              <span>✈️ ELECTRONIC TICKET PASSENGER ITINERARY</span>
-            </h2>
-            <p className="text-[10px] text-indigo-200">Official Flight Booking Confirmation</p>
+        <div className="bg-indigo-900 text-white p-2.5 rounded-xl flex items-center justify-between px-4 shadow-sm border border-indigo-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-800/80 border border-indigo-700 flex items-center justify-center text-indigo-200 shrink-0">
+              <i className="ti ti-plane text-base" />
+            </div>
+            <div>
+              <h2 className="text-xs sm:text-sm font-black tracking-wide text-white leading-tight uppercase">
+                ELECTRONIC TICKET PASSENGER ITINERARY
+              </h2>
+              <p className="text-[9px] text-indigo-200 font-bold tracking-wider uppercase mt-0.5">
+                OFFICIAL FLIGHT BOOKING CONFIRMATION
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] font-extrabold bg-emerald-500 text-white px-2.5 py-1 rounded-md shadow-xs border border-emerald-400 uppercase tracking-wider">
+              STATUS: CONFIRMED
+            </span>
           </div>
         </div>
 
         {/* Booking Reference & Lead Guest Bar */}
-        <div className={`grid grid-cols-2 ${activeTicketNo ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono`}>
-          <div>
-            <span className="text-[9px] font-bold text-slate-400 block">BOOKING REF / PNR</span>
-            <span className="font-black text-indigo-900 text-sm">{safePnr}</span>
+        <div className="grid grid-cols-3 gap-3 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 text-xs font-mono items-center shadow-2xs">
+          <div className="border-r border-slate-200/80 pr-2">
+            <span className="text-[9px] font-extrabold text-slate-400 uppercase block tracking-wider mb-0.5">BOOKING REF / PNR</span>
+            <span className="font-black text-indigo-950 text-sm tracking-wide">{safePnr || '-'}</span>
           </div>
-          <div>
-            <span className="text-[9px] font-bold text-slate-400 block">PASSENGER NAME</span>
-            <span className="font-bold text-slate-900">{activePaxName}</span>
+          <div className="border-r border-slate-200/80 px-2">
+            <span className="text-[9px] font-extrabold text-slate-400 uppercase block tracking-wider mb-0.5">PASSENGER NAME</span>
+            <span className="font-black text-slate-900 text-xs sm:text-sm truncate block font-sans">{activePaxName}</span>
           </div>
-          {activeTicketNo ? (
-            <div>
-              <span className="text-[9px] font-bold text-slate-400 block">TICKET NUMBER</span>
-              <span className="font-bold text-slate-800">{activeTicketNo}</span>
-            </div>
-          ) : null}
-          <div>
-            <span className="text-[9px] font-bold text-slate-400 block">ISSUE DATE</span>
-            <span className="font-bold text-slate-800">{safeHeaderDate}</span>
+          <div className="pl-2">
+            <span className="text-[9px] font-extrabold text-slate-400 uppercase block tracking-wider mb-0.5">ISSUE DATE</span>
+            <span className="font-bold text-slate-800 text-xs block">{safeHeaderDate}</span>
           </div>
         </div>
 
         {/* Flight Itinerary Table */}
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-800 border-b border-slate-200 pb-1">
-            <span>FLIGHT SCHEDULE & ITINERARY</span>
-            <span className="text-[10px] font-normal text-slate-500">All times are local</span>
+          <div className="flex items-center justify-between text-xs font-black text-slate-900 uppercase tracking-wide border-b border-slate-200 pb-1.5">
+            <span className="flex items-center gap-1.5">
+              <i className="ti ti-plane-departure text-indigo-600 text-sm" />
+              FLIGHT SCHEDULE & ITINERARY
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">ALL TIMES ARE LOCAL</span>
           </div>
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-800 text-white font-bold text-[10px]">
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider">
                 <tr>
-                  <th className="p-2">AIRLINE / FLIGHT</th>
-                  <th className="p-2">SECTOR</th>
-                  <th className="p-2">DATE</th>
-                  <th className="p-2">DEP TIME</th>
-                  <th className="p-2">ARR TIME</th>
+                  <th className="px-3 py-2 text-left font-black">AIRLINE / FLIGHT</th>
+                  <th className="py-2 text-center font-black">SECTOR</th>
+                  <th className="py-2 text-center font-black">DATE</th>
+                  <th className="py-2 text-center font-black">DEP TIME</th>
+                  <th className="py-2 text-center font-black">ARR TIME</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                {flights.map((f, fIdx) => (
-                  <tr key={`f-row-${fIdx}`} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    <td className="p-2 font-bold text-indigo-950">
-                      {(() => {
-                        const al = (f.airline || '').trim()
-                        const fn = (f.flight_no || f.flightNo || '').trim()
-                        if (!al) return fn || 'FLIGHT'
-                        if (!fn) return al
-                        if (fn.toUpperCase().startsWith(al.toUpperCase())) return fn
-                        return `${al} ${fn}`
-                      })()}
+                {flights.length > 0 ? (
+                  flights.map((f, fIdx) => (
+                    <tr key={`f-row-${fIdx}`} className={fIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                      <td className="px-3 py-2.5 font-black text-indigo-950 text-xs font-sans text-left">
+                        {(() => {
+                          const al = (f.airline || '').trim()
+                          const fn = (f.flight_no || f.flightNo || '').trim()
+                          if (!al) return fn || '-'
+                          if (!fn) return al
+                          if (fn.toUpperCase().startsWith(al.toUpperCase())) return fn
+                          return `${al} ${fn}`
+                        })()}
+                      </td>
+                      <td className="py-2.5 text-center font-black text-slate-900 text-xs font-mono">{f.sector || '-'}</td>
+                      <td className="py-2.5 text-center font-bold text-slate-700 text-xs font-mono">{f.date || '-'}</td>
+                      <td className="py-2.5 text-center font-bold text-slate-900 text-xs font-mono">{f.dep_time || f.depTime || '--:--'}</td>
+                      <td className="py-2.5 text-center font-bold text-slate-900 text-xs font-mono">{f.arr_time || f.arrTime || '--:--'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="p-3.5 text-center text-slate-400 italic font-sans normal-case">
+                      No flight schedule details entered.
                     </td>
-                    <td className="p-2 font-black text-slate-900">{f.sector || 'KHI - JED'}</td>
-                    <td className="p-2 text-slate-800">{f.date || '05 MAR'}</td>
-                    <td className="p-2 font-bold text-emerald-800">{f.dep_time || f.depTime || '--:--'}</td>
-                    <td className="p-2 font-bold text-slate-700">{f.arr_time || f.arrTime || '--:--'}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -1193,38 +1417,47 @@ export function ETicketPdfTemplate({
         {/* Passenger List Table (If grouped mode) */}
         {mode === 'grouped' && (
           <div className="space-y-1.5 pt-2">
-            <div className="text-xs font-bold text-slate-800 border-b border-slate-200 pb-1">
+            <div className="text-xs font-black text-slate-900 uppercase tracking-wide border-b border-slate-200 pb-1.5 flex items-center gap-1.5">
+              <i className="ti ti-users text-indigo-600 text-sm" />
               PASSENGER DETAILS ({formattedPassengers.length})
             </div>
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
               <table className="w-full text-xs text-center border-collapse">
-                <thead className="bg-indigo-50 text-indigo-950 font-bold text-[10px]">
+                <thead className="bg-indigo-50 text-indigo-950 font-bold text-[10px] uppercase tracking-wider">
                   <tr>
-                    <th className="p-2 w-10 text-center">#</th>
-                    <th className="p-2 text-center">PASSENGER NAME</th>
-                    {hasAnyPassport && <th className="p-2 w-36 text-center">PASSPORT NO</th>}
-                    {hasAnyTicket && <th className="p-2 w-44 text-center">TICKET NO</th>}
-                    <th className="p-2 w-24 text-center">TYPE</th>
+                    <th className="py-2 w-10 text-center">#</th>
+                    <th className="py-2 text-center">PASSENGER NAME</th>
+                    {hasAnyPassport && <th className="py-2 w-36 text-center">PASSPORT NO</th>}
+                    {hasAnyTicket && <th className="py-2 w-44 text-center">TICKET NO</th>}
+                    <th className="py-2 w-24 text-center">TYPE</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                  {formattedPassengers.map((p, pIdx) => (
-                    <tr key={`p-pax-${pIdx}`} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="p-2 text-center text-slate-400 font-bold">{pIdx + 1}</td>
-                      <td className="p-2 text-center font-black text-slate-900">{p.name}</td>
-                      {hasAnyPassport && <td className="p-2 text-center font-bold text-slate-700">{p.passport_no || '-'}</td>}
-                      {hasAnyTicket && <td className="p-2 text-center font-bold text-indigo-900">{p.ticket_no || '-'}</td>}
-                      <td className="p-2 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          p.type === 'CHD' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                          p.type === 'INF' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
-                          'bg-indigo-100 text-indigo-900 border border-indigo-200'
-                        }`}>
-                          {p.type}
-                        </span>
+                  {formattedPassengers.length > 0 ? (
+                    formattedPassengers.map((p, pIdx) => (
+                      <tr key={`p-pax-${pIdx}`} className={pIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="py-2.5 text-center text-slate-400 font-bold">{pIdx + 1}</td>
+                        <td className="py-2.5 text-center font-black text-slate-900 font-sans">{p.name || '-'}</td>
+                        {hasAnyPassport && <td className="py-2.5 text-center font-bold text-slate-700">{p.passport_no || '-'}</td>}
+                        {hasAnyTicket && <td className="py-2.5 text-center font-bold text-indigo-900">{p.ticket_no || '-'}</td>}
+                        <td className="py-2.5 text-center font-sans">
+                          <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-black uppercase ${
+                            p.type === 'CHD' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                            p.type === 'INF' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                            'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                          }`}>
+                            {p.type}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="p-3.5 text-center text-slate-400 italic font-sans normal-case">
+                        No passenger details entered.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1232,14 +1465,15 @@ export function ETicketPdfTemplate({
         )}
 
         {/* Important Terms & Conditions */}
-        <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
-          <p className="font-bold text-amber-950 uppercase flex items-center gap-1">
-            <span>⚠️ IMPORTANT TRAVEL NOTICE & AIRPORT RULES:</span>
+        <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 text-[10px] space-y-1.5 text-slate-700 shadow-2xs">
+          <p className="font-extrabold text-amber-950 uppercase flex items-center gap-1.5 tracking-wide">
+            <i className="ti ti-alert-triangle text-amber-600 text-xs shrink-0" />
+            <span>IMPORTANT TRAVEL NOTICE & AIRPORT RULES:</span>
           </p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            <li>Please report at the airport check-in counter at least 3-4 hours prior to scheduled flight departure.</li>
-            <li>Passport must be valid for at least 6 months from the date of travel with valid visas attached.</li>
-            <li>Baggage allowance strictly according to airline policy. Hand baggage must not exceed 7KG.</li>
+          <ul className="list-disc pl-4 space-y-1 font-medium text-slate-600 leading-normal">
+            <li>PLEASE REPORT AT THE AIRPORT CHECK-IN COUNTER AT LEAST 3-4 HOURS PRIOR TO SCHEDULED FLIGHT DEPARTURE.</li>
+            <li>PASSPORT MUST BE VALID FOR AT LEAST 6 MONTHS FROM THE DATE OF TRAVEL WITH VALID VISAS ATTACHED.</li>
+            <li>BAGGAGE ALLOWANCE STRICTLY ACCORDING TO AIRLINE POLICY. HAND BAGGAGE MUST NOT EXCEED 7KG.</li>
           </ul>
         </div>
       </div>
@@ -1248,21 +1482,21 @@ export function ETicketPdfTemplate({
 
   if (mode === 'separate' && formattedPassengers.length > 1) {
     return (
-      <div className="w-full max-w-4xl mx-auto space-y-6">
+      <div id="printable-eticket" className="w-full max-w-4xl mx-auto space-y-6">
         {formattedPassengers.map((p, i) => renderSingleTicket(p, i, i > 0))}
       </div>
     )
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div id="printable-eticket" className="w-full max-w-4xl mx-auto">
       {renderSingleTicket(null, 0, false)}
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🏨 HOTEL ACCOMMODATION VOUCHER TEMPLATE (ID 420)
+// 🏨 HOTEL ACCOMMODATION VOUCHER TEMPLATE
 // ─────────────────────────────────────────────────────────────────────────────
 export function HotelVoucherPdfTemplate({
   companyDetails = null,
@@ -1278,88 +1512,108 @@ export function HotelVoucherPdfTemplate({
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
-  const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
+  const safeClient = String(leadGuestName || header?.name || '').toUpperCase()
   const safeDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
-  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `HV-${header.sr_no}` : 'HV-1001')).toUpperCase()
+  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `HV-${header.sr_no}` : '')).toUpperCase()
 
-  const mList = Array.isArray(makkahHotels) && makkahHotels.length > 0
-    ? makkahHotels
-    : [{ hotel_name: 'Makkah Hotel', check_in: '10-MAR-2026', check_out: '15-MAR-2026', nights: 5, room_type: 'Double Room', room_qty: 1 }]
+  const rawMakkah = Array.isArray(makkahHotels) ? makkahHotels : []
+  const mList = rawMakkah.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn || h.room_type || h.roomType))
 
-  const madList = Array.isArray(madinaHotels) && madinaHotels.length > 0
-    ? madinaHotels
-    : [{ hotel_name: 'Madina Hotel', check_in: '15-MAR-2026', check_out: '20-MAR-2026', nights: 5, room_type: 'Double Room', room_qty: 1 }]
+  const rawMadina = Array.isArray(madinaHotels) ? madinaHotels : []
+  const madList = rawMadina.filter(h => h && (h.hotel_name || h.hotelName || h.check_in || h.checkIn || h.room_type || h.roomType))
 
   return (
     <div className="w-full max-w-4xl mx-auto p-1 sm:p-2">
-      <div id="printable-hotel-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm text-left uppercase">
+      <div id="printable-hotel-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-2xl border border-slate-300 shadow-sm text-left uppercase">
         
         {/* Company Header */}
         {company && (
           <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white rounded-xl p-3.5 shadow-md border border-emerald-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {company.logoUrl ? (
-                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+                <img src={company.logoUrl} alt={company.name} className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-1 shadow-sm shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-bold text-xl">
-                  🏨
+                <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-bold text-xl shadow-md border border-white/20 shrink-0">
+                  <i className="ti ti-building-hospital text-xl text-white" />
                 </div>
               )}
-              <div>
-                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+              <div className="space-y-0.5">
+                <h1 className="text-base sm:text-lg font-black text-white leading-none tracking-tight">
                   {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
                 </h1>
-                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
-                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold tracking-wide uppercase mt-0.5">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium leading-none uppercase mt-0.5">{company.address}</p>}
               </div>
             </div>
-            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
-              {company.phone && <div>📞 {company.phone}</div>}
-              {company.email && <div>✉️ {company.email}</div>}
-              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            <div className="text-right text-[10px] space-y-1 text-slate-300 font-medium border-l border-white/10 pl-3.5 shrink-0 uppercase">
+              {company.phone && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-phone text-emerald-400 text-xs shrink-0" />
+                  <span>{company.phone}</span>
+                </div>
+              )}
+              {company.email && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-mail text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.email}</span>
+                </div>
+              )}
+              {company.website && (
+                <div className="flex items-center justify-end gap-1.5 font-bold text-white">
+                  <i className="ti ti-world text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.website}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Title Banner */}
-        <div className="bg-emerald-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
-          <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
-            <span>🏨 OFFICIAL HOTEL ACCOMMODATION VOUCHER</span>
-          </h2>
-          <span className="text-[10px] font-bold bg-white text-emerald-900 px-2.5 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+        <div className="bg-emerald-900 text-white p-2.5 rounded-xl flex items-center justify-between px-4 shadow-sm border border-emerald-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-800/80 border border-emerald-700 flex items-center justify-center text-emerald-200 shrink-0">
+              <i className="ti ti-building-hospital text-base" />
+            </div>
+            <h2 className="text-xs sm:text-sm font-black tracking-wide text-white leading-tight uppercase">
+              OFFICIAL HOTEL ACCOMMODATION VOUCHER
+            </h2>
+          </div>
+          <span className="text-[10px] font-extrabold bg-white text-emerald-900 px-2.5 py-1 rounded-md shadow-xs border border-emerald-200 uppercase tracking-wider">
+            STATUS: CONFIRMED
+          </span>
         </div>
 
         {/* Lead Guest & Voucher Details Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-emerald-50/50 p-3 rounded-lg border border-emerald-200 text-xs font-mono">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200 text-xs font-mono items-center shadow-2xs">
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">LEAD GUEST NAME</span>
-            <span className="font-black text-emerald-950 text-sm">{safeClient}</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">LEAD GUEST NAME</span>
+            <span className="font-black text-emerald-950 text-sm font-sans">{safeClient || '-'}</span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
-            <span className="font-bold text-slate-900">{safeVoucherNo}</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">VOUCHER NO</span>
+            <span className="font-bold text-slate-900">{safeVoucherNo || '-'}</span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">TOTAL PAX</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">TOTAL PAX</span>
             <span className="font-bold text-slate-800">
-              {paxSummary.adt || 1} ADT {paxSummary.child ? `/ ${paxSummary.child} CHD` : ''}
+              {paxSummary.adt || 0} ADT {paxSummary.child ? `/ ${paxSummary.child} CHD` : ''}
             </span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">ISSUE DATE</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">ISSUE DATE</span>
             <span className="font-bold text-slate-800">{safeDate}</span>
           </div>
         </div>
 
         {/* Makkah Hotels Section */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-black text-emerald-900 border-b border-emerald-200 pb-1">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs font-black text-emerald-900 uppercase tracking-wide border-b border-emerald-200 pb-1.5">
             <span>🕋 MAKKAH AL MUKARRAMAH ACCOMMODATION</span>
-            {hcnMakkah && <span className="text-xs bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold">HCN #: {hcnMakkah}</span>}
+            {hcnMakkah && <span className="text-xs bg-emerald-100 text-emerald-950 px-2.5 py-0.5 rounded-md font-mono font-bold">HCN #: {hcnMakkah}</span>}
           </div>
-          <div className="border border-emerald-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-emerald-800 text-white font-bold text-[10px]">
+          <div className="border border-emerald-200 rounded-xl overflow-hidden shadow-2xs">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="p-2">HOTEL NAME</th>
                   <th className="p-2">CHECK IN</th>
@@ -1370,39 +1624,41 @@ export function HotelVoucherPdfTemplate({
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-100 font-mono text-[11px]">
-                {mList.map((h, i) => (
-                  <tr key={`m-h-${i}`} className="bg-white">
-                    <td className="p-2.5 font-black text-emerald-950">{h.hotel_name || h.hotelName || 'MAKKAH HOTEL'}</td>
-                    <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
-                    <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
-                    <td className="p-2.5 font-bold text-slate-700">
-                      {(() => {
-                        const q = h.room_qty || h.roomQty || h.qty
-                        const t = (h.room_type || h.roomType || h.type || '').trim()
-                        if (q && t) return `${q} X ${t.toUpperCase()}`
-                        if (t) return t.toUpperCase()
-                        if (q) return `${q} ROOM${Number(q) > 1 ? 'S' : ''}`
-                        return '-'
-                      })()}
+                {mList.length > 0 ? (
+                  mList.flatMap((h, i) => expandHotelRooms(h).map((rm, rmIdx) => (
+                    <tr key={`m-h-${i}-${rmIdx}`} className="bg-white">
+                      <td className="p-2.5 font-black text-emerald-950 font-sans">
+                        {rm.hotel_name || rm.hotelName || '-'}
+                        {rm.room_number > 1 && <span className="text-[10px] text-amber-700 font-bold block">ROOM #{rm.room_number}</span>}
+                      </td>
+                      <td className="p-2.5 font-bold text-slate-800">{rm.display_check_in}</td>
+                      <td className="p-2.5 font-bold text-slate-800">{rm.display_check_out}</td>
+                      <td className="p-2.5 text-center font-bold text-emerald-800">{rm.display_nights} NIGHTS</td>
+                      <td className="p-2.5 font-bold text-slate-700">{rm.room_type_summary}</td>
+                      <td className="p-2.5 font-bold text-indigo-900 font-mono">{rm.hcn || hcnMakkah || 'CONFIRMED'}</td>
+                    </tr>
+                  )))
+                ) : (
+                  <tr className="bg-white">
+                    <td colSpan={6} className="p-3.5 text-center text-slate-400 italic font-sans normal-case">
+                      No Makkah hotel accommodation details entered.
                     </td>
-                    <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMakkah || 'CONFIRMED'}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
         {/* Madina Hotels Section */}
-        <div className="space-y-2 pt-2">
-          <div className="flex items-center justify-between text-xs font-black text-emerald-900 border-b border-emerald-200 pb-1">
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center justify-between text-xs font-black text-emerald-900 uppercase tracking-wide border-b border-emerald-200 pb-1.5">
             <span>🕌 MADINA AL MUNAWWARAH ACCOMMODATION</span>
-            {hcnMadina && <span className="text-xs bg-emerald-100 text-emerald-950 px-2 py-0.5 rounded font-mono font-bold">HCN #: {hcnMadina}</span>}
+            {hcnMadina && <span className="text-xs bg-emerald-100 text-emerald-950 px-2.5 py-0.5 rounded-md font-mono font-bold">HCN #: {hcnMadina}</span>}
           </div>
-          <div className="border border-emerald-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-emerald-800 text-white font-bold text-[10px]">
+          <div className="border border-emerald-200 rounded-xl overflow-hidden shadow-2xs">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-emerald-800 text-white font-bold text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="p-2">HOTEL NAME</th>
                   <th className="p-2">CHECK IN</th>
@@ -1413,25 +1669,27 @@ export function HotelVoucherPdfTemplate({
                 </tr>
               </thead>
               <tbody className="divide-y divide-emerald-100 font-mono text-[11px]">
-                {madList.map((h, i) => (
-                  <tr key={`mad-h-${i}`} className="bg-white">
-                    <td className="p-2.5 font-black text-emerald-950">{h.hotel_name || h.hotelName || 'MADINA HOTEL'}</td>
-                    <td className="p-2.5 font-bold text-slate-800">{h.check_in || h.checkIn || '--'}</td>
-                    <td className="p-2.5 font-bold text-slate-800">{h.check_out || h.checkOut || '--'}</td>
-                    <td className="p-2.5 text-center font-bold text-emerald-800">{h.nights || 0} NIGHTS</td>
-                    <td className="p-2.5 font-bold text-slate-700">
-                      {(() => {
-                        const q = h.room_qty || h.roomQty || h.qty
-                        const t = (h.room_type || h.roomType || h.type || '').trim()
-                        if (q && t) return `${q} X ${t.toUpperCase()}`
-                        if (t) return t.toUpperCase()
-                        if (q) return `${q} ROOM${Number(q) > 1 ? 'S' : ''}`
-                        return '-'
-                      })()}
+                {madList.length > 0 ? (
+                  madList.flatMap((h, i) => expandHotelRooms(h).map((rm, rmIdx) => (
+                    <tr key={`mad-h-${i}-${rmIdx}`} className="bg-white">
+                      <td className="p-2.5 font-black text-emerald-950 font-sans">
+                        {rm.hotel_name || rm.hotelName || '-'}
+                        {rm.room_number > 1 && <span className="text-[10px] text-emerald-700 font-bold block">ROOM #{rm.room_number}</span>}
+                      </td>
+                      <td className="p-2.5 font-bold text-slate-800">{rm.display_check_in}</td>
+                      <td className="p-2.5 font-bold text-slate-800">{rm.display_check_out}</td>
+                      <td className="p-2.5 text-center font-bold text-emerald-800">{rm.display_nights} NIGHTS</td>
+                      <td className="p-2.5 font-bold text-slate-700">{rm.room_type_summary}</td>
+                      <td className="p-2.5 font-bold text-indigo-900 font-mono">{rm.hcn || hcnMadina || 'CONFIRMED'}</td>
+                    </tr>
+                  )))
+                ) : (
+                  <tr className="bg-white">
+                    <td colSpan={6} className="p-3.5 text-center text-slate-400 italic font-sans normal-case">
+                      No Madina hotel accommodation details entered.
                     </td>
-                    <td className="p-2.5 font-bold text-indigo-900 font-mono">{h.hcn || hcnMadina || 'CONFIRMED'}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -1439,18 +1697,21 @@ export function HotelVoucherPdfTemplate({
 
         {/* Comments / Meal Inclusions */}
         {comments && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
             <span className="font-bold text-slate-700">SPECIAL INSTRUCTIONS / MEAL PLAN:</span> {comments}
           </div>
         )}
 
         {/* Hotel Terms */}
-        <div className="bg-emerald-50/60 border border-emerald-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
-          <p className="font-bold text-emerald-950">📌 HOTEL CHECK-IN POLICIES & TERMS:</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            <li>Standard Hotel Check-In time is 16:00 (4:00 PM) and Check-Out time is 12:00 (12:00 PM).</li>
-            <li>Original Passport / Saudi National ID must be presented at the hotel reception desk upon arrival.</li>
-            <li>Hotel Reservation Numbers (HCN) are non-transferable and guaranteed by the issuing travel provider.</li>
+        <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 text-[10px] space-y-1.5 text-slate-700 shadow-2xs">
+          <p className="font-extrabold text-emerald-950 uppercase flex items-center gap-1.5 tracking-wide">
+            <i className="ti ti-info-circle text-emerald-600 text-xs shrink-0" />
+            <span>HOTEL CHECK-IN POLICIES & TERMS:</span>
+          </p>
+          <ul className="list-disc pl-4 space-y-1 font-medium text-slate-600 leading-normal">
+            <li>STANDARD HOTEL CHECK-IN TIME IS 16:00 (4:00 PM) AND CHECK-OUT TIME IS 12:00 (12:00 PM).</li>
+            <li>ORIGINAL PASSPORT / SAUDI NATIONAL ID MUST BE PRESENTED AT THE HOTEL RECEPTION DESK UPON ARRIVAL.</li>
+            <li>HOTEL RESERVATION NUMBERS (HCN) ARE NON-TRANSFERABLE AND GUARANTEED BY THE ISSUING TRAVEL PROVIDER.</li>
           </ul>
         </div>
 
@@ -1460,7 +1721,7 @@ export function HotelVoucherPdfTemplate({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 🚌 TRANSPORTATION VOUCHER TEMPLATE (ID 420)
+// 🚌 TRANSPORTATION VOUCHER TEMPLATE
 // ─────────────────────────────────────────────────────────────────────────────
 export function TransportVoucherPdfTemplate({
   companyDetails = null,
@@ -1474,81 +1735,103 @@ export function TransportVoucherPdfTemplate({
   comments = ''
 }) {
   const company = companyDetails || getActiveCompanyDetails()
-  const safeClient = String(leadGuestName || header?.name || 'VALUED CLIENT').toUpperCase()
+  const safeClient = String(leadGuestName || header?.name || '').toUpperCase()
   const safeDate = String(issueDate || header?.date || new Date().toISOString().slice(0, 10))
-  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `TV-${header.sr_no}` : 'TV-1001')).toUpperCase()
+  const safeVoucherNo = String(voucherNo || (header?.sr_no ? `TV-${header.sr_no}` : '')).toUpperCase()
 
-  const tList = Array.isArray(transportRows) && transportRows.length > 0
-    ? transportRows
-    : [{ type: 'PRIVATE GMC YUKON', qty: 1, sector: 'JED AIRPORT -> MAKKAH HOTEL -> MADINA HOTEL -> JED AIRPORT', date: safeDate, driver: driverContact || 'COORDINATOR ON ARRIVAL' }]
+  const rawTrans = Array.isArray(transportRows) ? transportRows : []
+  const tList = rawTrans.filter(t => t && (t.type || t.sector || t.driver || t.price))
 
   return (
     <div className="w-full max-w-4xl mx-auto p-1 sm:p-2">
-      <div id="printable-transport-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-xl border border-slate-300 shadow-sm text-left uppercase">
+      <div id="printable-transport-voucher" className="bg-white text-slate-900 font-sans p-4 sm:p-6 space-y-4 rounded-2xl border border-slate-300 shadow-sm text-left uppercase">
         
         {/* Company Header */}
         {company && (
           <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white rounded-xl p-3.5 shadow-md border border-blue-800 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               {company.logoUrl ? (
-                <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[150px] object-contain rounded-lg bg-white p-1" />
+                <img src={company.logoUrl} alt={company.name} className="h-11 w-auto max-w-[140px] object-contain rounded-lg bg-white p-1 shadow-sm shrink-0" />
               ) : (
-                <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xl">
-                  🚌
+                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xl shadow-md border border-white/20 shrink-0">
+                  <i className="ti ti-bus text-xl text-white" />
                 </div>
               )}
-              <div>
-                <h1 className="text-base sm:text-lg font-black text-white leading-none">
+              <div className="space-y-0.5">
+                <h1 className="text-base sm:text-lg font-black text-white leading-none tracking-tight">
                   {company.name || 'ZUYUFURRAHMAN HAJJ & UMRAH'}
                 </h1>
-                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold mt-0.5">{company.tagline}</p>}
-                {company.address && <p className="text-[10px] text-slate-300 font-medium mt-0.5">{company.address}</p>}
+                {company.tagline && <p className="text-[10px] text-emerald-400 font-bold tracking-wide uppercase mt-0.5">{company.tagline}</p>}
+                {company.address && <p className="text-[10px] text-slate-300 font-medium leading-none uppercase mt-0.5">{company.address}</p>}
               </div>
             </div>
-            <div className="text-right text-[10px] text-slate-300 font-medium border-l border-white/10 pl-3">
-              {company.phone && <div>📞 {company.phone}</div>}
-              {company.email && <div>✉️ {company.email}</div>}
-              {company.website && <div className="text-emerald-400 font-bold">{company.website}</div>}
+            <div className="text-right text-[10px] space-y-1 text-slate-300 font-medium border-l border-white/10 pl-3.5 shrink-0 uppercase">
+              {company.phone && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-phone text-emerald-400 text-xs shrink-0" />
+                  <span>{company.phone}</span>
+                </div>
+              )}
+              {company.email && (
+                <div className="flex items-center justify-end gap-1.5">
+                  <i className="ti ti-mail text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.email}</span>
+                </div>
+              )}
+              {company.website && (
+                <div className="flex items-center justify-end gap-1.5 font-bold text-white">
+                  <i className="ti ti-world text-emerald-400 text-xs shrink-0" />
+                  <span className="lowercase">{company.website}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Title Banner */}
-        <div className="bg-blue-900 text-white p-2.5 rounded-lg flex items-center justify-between px-4">
-          <h2 className="text-sm font-black tracking-wide flex items-center gap-2">
-            <span>🚌 OFFICIAL TRANSPORTATION SERVICES VOUCHER</span>
-          </h2>
-          <span className="text-[10px] font-bold bg-white text-blue-900 px-2.5 py-0.5 rounded-md">STATUS: CONFIRMED</span>
+        <div className="bg-blue-900 text-white p-2.5 rounded-xl flex items-center justify-between px-4 shadow-sm border border-blue-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-blue-800/80 border border-blue-700 flex items-center justify-center text-blue-200 shrink-0">
+              <i className="ti ti-bus text-base" />
+            </div>
+            <h2 className="text-xs sm:text-sm font-black tracking-wide text-white leading-tight uppercase">
+              OFFICIAL TRANSPORTATION SERVICES VOUCHER
+            </h2>
+          </div>
+          <span className="text-[10px] font-extrabold bg-white text-blue-900 px-2.5 py-1 rounded-md shadow-xs border border-blue-200 uppercase tracking-wider">
+            STATUS: CONFIRMED
+          </span>
         </div>
 
         {/* Lead Guest & Voucher Details Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 text-xs font-mono">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-blue-50/60 p-3.5 rounded-xl border border-blue-200 text-xs font-mono items-center shadow-2xs">
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">LEAD PASSENGER</span>
-            <span className="font-black text-blue-950 text-sm">{safeClient}</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">LEAD PASSENGER</span>
+            <span className="font-black text-blue-950 text-sm font-sans">{safeClient || '-'}</span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">VOUCHER NO</span>
-            <span className="font-bold text-slate-900">{safeVoucherNo}</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">VOUCHER NO</span>
+            <span className="font-bold text-slate-900">{safeVoucherNo || '-'}</span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">PASSENGER COUNT</span>
-            <span className="font-bold text-slate-800">{paxSummary.adt || 1} ADT</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">PASSENGER COUNT</span>
+            <span className="font-bold text-slate-800">{paxSummary.adt || 0} ADT</span>
           </div>
           <div>
-            <span className="text-[9px] font-bold text-slate-500 block">ISSUE DATE</span>
+            <span className="text-[9px] font-extrabold text-slate-500 block uppercase tracking-wider mb-0.5">ISSUE DATE</span>
             <span className="font-bold text-slate-800">{safeDate}</span>
           </div>
         </div>
 
         {/* Transport Schedule Table */}
-        <div className="space-y-2">
-          <div className="text-xs font-black text-blue-900 border-b border-blue-200 pb-1">
+        <div className="space-y-1.5">
+          <div className="text-xs font-black text-blue-900 uppercase tracking-wide border-b border-blue-200 pb-1.5 flex items-center gap-1.5">
+            <i className="ti ti-steering-wheel text-blue-600 text-sm" />
             TRANSPORTATION SECTORS & VEHICLE DETAILS
           </div>
-          <div className="border border-blue-200 rounded-lg overflow-hidden">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-blue-900 text-white font-bold text-[10px]">
+          <div className="border border-blue-200 rounded-xl overflow-hidden shadow-2xs">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-blue-900 text-white font-bold text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="p-2.5">VEHICLE TYPE</th>
                   <th className="p-2.5">SECTOR / ROUTE</th>
@@ -1557,14 +1840,22 @@ export function TransportVoucherPdfTemplate({
                 </tr>
               </thead>
               <tbody className="divide-y divide-blue-100 font-mono text-[11px]">
-                {tList.map((t, i) => (
-                  <tr key={`t-row-${i}`} className="bg-white">
-                    <td className="p-3 font-black text-blue-950">{t.type || 'PRIVATE VEHICLE'}</td>
-                    <td className="p-3 font-bold text-slate-900">{t.sector || 'JED AIRPORT -> MAKKAH HOTEL'}</td>
-                    <td className="p-3 text-center font-bold text-blue-800">{t.qty || 1}</td>
-                    <td className="p-3 font-bold text-emerald-800">{t.driver || driverContact || 'ON ARRIVAL CALL'}</td>
+                {tList.length > 0 ? (
+                  tList.map((t, i) => (
+                    <tr key={`t-row-${i}`} className="bg-white">
+                      <td className="p-3 font-black text-blue-950 font-sans">{t.type || '-'}</td>
+                      <td className="p-3 font-bold text-slate-900 font-sans">{t.sector || '-'}</td>
+                      <td className="p-3 text-center font-bold text-blue-800">{t.qty || 1}</td>
+                      <td className="p-3 font-bold text-emerald-800">{t.driver || driverContact || 'ON ARRIVAL CALL'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr className="bg-white">
+                    <td colSpan={4} className="p-3.5 text-center text-slate-400 italic font-sans normal-case">
+                      No transportation sector details entered.
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -1572,18 +1863,21 @@ export function TransportVoucherPdfTemplate({
 
         {/* Driver Contact & Special Instructions */}
         {comments && (
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
             <span className="font-bold text-slate-700">REMARKS & PICKUP NOTES:</span> {comments}
           </div>
         )}
 
         {/* Transport Guidelines */}
-        <div className="bg-blue-50/60 border border-blue-200 rounded-lg p-3 text-[10px] space-y-1 text-slate-700">
-          <p className="font-bold text-blue-950">📍 ARRIVAL & PICKUP INSTRUCTIONS:</p>
-          <ul className="list-disc pl-4 space-y-0.5">
-            <li>For Airport Pickups: Transport coordinator will hold a name board at the exit arrival terminal.</li>
-            <li>Please inform driver / transport coordinator immediately if your flight is delayed.</li>
-            <li>Luggage capacity is subject to the vehicle specification booked. Extra baggage may require an additional vehicle.</li>
+        <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 text-[10px] space-y-1.5 text-slate-700 shadow-2xs">
+          <p className="font-extrabold text-blue-950 uppercase flex items-center gap-1.5 tracking-wide">
+            <i className="ti ti-map-pin text-blue-600 text-xs shrink-0" />
+            <span>ARRIVAL & PICKUP INSTRUCTIONS:</span>
+          </p>
+          <ul className="list-disc pl-4 space-y-1 font-medium text-slate-600 leading-normal">
+            <li>FOR AIRPORT PICKUPS: TRANSPORT COORDINATOR WILL HOLD A NAME BOARD AT THE EXIT ARRIVAL TERMINAL.</li>
+            <li>PLEASE INFORM DRIVER / TRANSPORT COORDINATOR IMMEDIATELY IF YOUR FLIGHT IS DELAYED.</li>
+            <li>LUGGAGE CAPACITY IS SUBJECT TO THE VEHICLE SPECIFICATION BOOKED. EXTRA BAGGAGE MAY REQUIRE AN ADDITIONAL VEHICLE.</li>
           </ul>
         </div>
 
@@ -1593,7 +1887,7 @@ export function TransportVoucherPdfTemplate({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ✨ ALL-IN-ONE CONSOLIDATED VOUCHER SUITE TEMPLATE (ID 420)
+// ✨ ALL-IN-ONE CONSOLIDATED VOUCHER SUITE TEMPLATE
 // ─────────────────────────────────────────────────────────────────────────────
 export function AllInOnePdfTemplate({
   companyDetails = null,
