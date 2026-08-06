@@ -1871,7 +1871,7 @@ export default function Clients() {
                 placeholder="AIzaSy..."
                 value={userApiKey}
                 onChange={(e) => setUserApiKey(e.target.value)}
-                className="flex-1 text-xs border border-amber-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="flex-1 text-xs border border-amber-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 normal-case"
               />
               <button
                 onClick={() => {

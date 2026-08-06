@@ -684,7 +684,7 @@ export default function Package() {
                 value={userApiKey}
                 onChange={(e) => setUserApiKey(e.target.value)}
                 placeholder="AIzaSy..."
-                className="w-full text-xs px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                className="w-full text-xs px-3 py-2 border border-amber-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono normal-case"
               />
               <button 
                 onClick={() => {

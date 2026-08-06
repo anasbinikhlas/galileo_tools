@@ -10,8 +10,14 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  input[type="text"] {
+  input[type="text"]:not(.normal-case) {
     text-transform: uppercase;
+  }
+
+  input[type="password"],
+  input.normal-case,
+  input[name="password"] {
+    text-transform: none !important;
   }
 
   ::-webkit-scrollbar { width: 5px; height: 5px; }
