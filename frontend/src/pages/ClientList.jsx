@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { ColorPdfTemplate, StandardPdfTemplate } from '../components/VoucherTemplates'
+import { fetchServerClients, saveServerClients, deleteServerClient } from '../api/sync'
 
 export default function ClientList() {
   const navigate = useNavigate()
@@ -23,8 +24,15 @@ export default function ClientList() {
   const [selectedClient, setSelectedClient] = useState(null)
 
   useEffect(() => {
+    fetchServerClients().then(data => {
+      if (Array.isArray(data) && data.length > 0) setSavedClients(data)
+    })
+  }, [])
+
+  useEffect(() => {
     try {
       localStorage.setItem('galileo_clients', JSON.stringify(savedClients))
+      saveServerClients(savedClients)
     } catch (e) {
       console.error('Failed to sync client list to localStorage', e)
     }
@@ -44,6 +52,7 @@ export default function ClientList() {
   const handleDeleteClient = (id, name) => {
     if (window.confirm(`Are you sure you want to delete client record for "${name}"?`)) {
       setSavedClients(prev => prev.filter(c => c.id !== id))
+      deleteServerClient(id)
       toast.success(`Client record deleted`, { id: `del-${id}` })
     }
   }

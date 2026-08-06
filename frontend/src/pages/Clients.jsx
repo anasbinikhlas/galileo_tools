@@ -4,6 +4,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { ColorPdfTemplate, StandardPdfTemplate, InvoicePdfTemplate, ETicketPdfTemplate, HotelVoucherPdfTemplate, TransportVoucherPdfTemplate, AllInOnePdfTemplate } from '../components/VoucherTemplates'
 import PackageSalesReportModal from '../components/PackageSalesReportModal'
+import { fetchServerClients, saveServerClients } from '../api/sync'
 
 // API Key configuration fallback
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
@@ -1038,8 +1039,15 @@ export default function Clients() {
   }, [editIdParam, savedClients])
 
   useEffect(() => {
+    fetchServerClients().then(data => {
+      if (Array.isArray(data) && data.length > 0) setSavedClients(data)
+    })
+  }, [])
+
+  useEffect(() => {
     try {
       localStorage.setItem('galileo_clients', JSON.stringify(savedClients))
+      saveServerClients(savedClients)
     } catch (e) {
       console.error('Failed to save clients to localStorage', e)
     }

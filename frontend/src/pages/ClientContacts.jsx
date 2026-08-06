@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
+import { fetchServerContacts, saveServerContacts, deleteServerContact } from '../api/sync'
 
 export default function ClientContacts() {
   const [contacts, setContacts] = useState(() => {
@@ -24,8 +25,15 @@ export default function ClientContacts() {
   })
 
   useEffect(() => {
+    fetchServerContacts().then(data => {
+      if (Array.isArray(data) && data.length > 0) setContacts(data)
+    })
+  }, [])
+
+  useEffect(() => {
     try {
       localStorage.setItem('galileo_contacts', JSON.stringify(contacts))
+      saveServerContacts(contacts)
     } catch (e) {
       console.error('Failed to sync contacts to localStorage', e)
     }

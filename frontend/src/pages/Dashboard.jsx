@@ -134,8 +134,8 @@ function RoundGraphCard({ title, count, total, percentage, strokeColor, trackCol
 export default function Dashboard() {
   const navigate = useNavigate()
 
-  // Read live client records from localStorage
-  const [clients] = useState(() => {
+  // Read live client records from database / localStorage
+  const [clients, setClients] = useState(() => {
     try {
       const stored = localStorage.getItem('galileo_clients')
       return stored ? JSON.parse(stored) : []
@@ -143,6 +143,12 @@ export default function Dashboard() {
       return []
     }
   })
+
+  useEffect(() => {
+    fetchServerClients().then(data => {
+      if (Array.isArray(data)) setClients(data)
+    })
+  }, [])
 
   const handleExportData = () => {
     try {
@@ -190,15 +196,13 @@ export default function Dashboard() {
   const completedCount = clients.filter(c => c.status === 'Complete' || c.status === 'Completed').length
   const pendingCount = totalCount > 0 ? (totalCount - completedCount) : 0
 
-  // Display values (using fallback numbers if total is 0 to showcase design)
-  const displayTotal = totalCount > 0 ? totalCount : 12
-  const displayCompleted = totalCount > 0 ? completedCount : 8
-  const displayPending = totalCount > 0 ? pendingCount : 4
-  const isDemoData = totalCount === 0
+  const displayTotal = totalCount
+  const displayCompleted = completedCount
+  const displayPending = pendingCount
 
-  const completedPct = (displayCompleted / displayTotal) * 100
-  const pendingPct = (displayPending / displayTotal) * 100
-  const totalPct = 100
+  const completedPct = displayTotal > 0 ? (displayCompleted / displayTotal) * 100 : 0
+  const pendingPct = displayTotal > 0 ? (displayPending / displayTotal) * 100 : 0
+  const totalPct = displayTotal > 0 ? 100 : 0
 
   return (
     <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-6xl mx-auto">
@@ -236,11 +240,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            {isDemoData && (
-              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                Demo Preview Data
-              </span>
-            )}
             <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live System Overview

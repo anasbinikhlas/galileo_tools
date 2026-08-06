@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { InvoicePdfTemplate } from '../components/VoucherTemplates'
+import { fetchServerInvoices, saveServerInvoices, deleteServerInvoice } from '../api/sync'
 
 export default function Invoice({ defaultView = 'list' }) {
   const navigate = useNavigate()
@@ -65,8 +66,15 @@ export default function Invoice({ defaultView = 'list' }) {
   })
 
   useEffect(() => {
+    fetchServerInvoices().then(data => {
+      if (Array.isArray(data) && data.length > 0) setSavedInvoices(data)
+    })
+  }, [])
+
+  useEffect(() => {
     try {
       localStorage.setItem('galileo_invoices', JSON.stringify(savedInvoices))
+      saveServerInvoices(savedInvoices)
     } catch (e) {
       console.error('Failed to save invoices to localStorage', e)
     }
