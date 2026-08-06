@@ -3,14 +3,14 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { InvoicePdfTemplate } from '../components/VoucherTemplates'
-import { fetchServerInvoices, saveServerInvoices, deleteServerInvoice } from '../api/sync'
+import { fetchServerInvoices, saveServerInvoices, deleteServerInvoice, fetchServerClients } from '../api/sync'
 
 export default function Invoice({ defaultView = 'list' }) {
   const navigate = useNavigate()
   const location = useLocation()
 
   // Load saved clients for quick client auto-complete
-  const [savedClients] = useState(() => {
+  const [savedClients, setSavedClients] = useState(() => {
     try {
       const stored = localStorage.getItem('galileo_clients')
       return stored ? JSON.parse(stored) : []
@@ -34,6 +34,7 @@ export default function Invoice({ defaultView = 'list' }) {
   const activeView = isCreatePage ? 'editor' : (defaultView || 'list')
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [clientSearchTerm, setClientSearchTerm] = useState('')
 
   const [invoiceData, setInvoiceData] = useState({
     invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
@@ -44,7 +45,7 @@ export default function Invoice({ defaultView = 'list' }) {
     whatsapp: '',
     email: '',
     ticketPassengers: [],
-    items: [],
+    items: [{ description: 'PACKAGE / SERVICE CHARGE', amount: 0 }],
     subtotal: 0,
     discount: '0',
     totalAmount: 0,
@@ -52,25 +53,19 @@ export default function Invoice({ defaultView = 'list' }) {
     balanceDue: 0,
     status: 'UNPAID',
     paymentMethod: 'Bank Transfer',
-    bankDetails: '',
+    bankDetails: 'Meezan Bank - A/C 0102030405',
     remarks: 'Thank you for your business.',
     hideBreakup: false
   })
 
   useEffect(() => {
     fetchServerInvoices().then(data => {
-      if (Array.isArray(data) && data.length > 0) setSavedInvoices(data)
+      if (Array.isArray(data)) setSavedInvoices(data)
+    })
+    fetchServerClients().then(data => {
+      if (Array.isArray(data)) setSavedClients(data)
     })
   }, [])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('galileo_invoices', JSON.stringify(savedInvoices))
-      saveServerInvoices(savedInvoices)
-    } catch (e) {
-      console.error('Failed to save invoices to localStorage', e)
-    }
-  }, [savedInvoices])
 
   // Reset entire Invoice Form
   const handleResetForm = () => {
@@ -167,7 +162,7 @@ export default function Invoice({ defaultView = 'list' }) {
   }
 
   const handleUpdatePaymentItem = (index, field, value) => {
-    const updatedPayments = (invoiceData.payments || []).map((pm, i) => i === idx ? { ...pm, [field]: value } : pm)
+    const updatedPayments = (invoiceData.payments || []).map((pm, i) => i === index ? { ...pm, [field]: value } : pm)
     const totalPaidSum = updatedPayments.reduce((sum, pm) => sum + Number(pm.amount || 0), 0)
     const math = recalculateFinancials(invoiceData.items, invoiceData.ticketPassengers || [], invoiceData.discount, totalPaidSum, invoiceData.visaPassengers, invoiceData.hotelItems, invoiceData.transportItems)
     setInvoiceData({ ...invoiceData, payments: updatedPayments, amountPaid: totalPaidSum, ...math })
@@ -296,28 +291,79 @@ export default function Invoice({ defaultView = 'list' }) {
         }
       }
 
-      if (importedItems.length === 0) {
-        importedItems = invoiceData.items && invoiceData.items.length > 0 ? invoiceData.items : [{ description: 'PACKAGE / SERVICE CHARGE', amount: 0 }]
+      if (importedItems.length === 0 && importedTicketPassengers.length === 0) {
+        importedItems = [{ description: 'PACKAGE / SERVICE CHARGE', amount: 0 }]
       }
 
+      // Check if an invoice ALREADY exists in savedInvoices (or localStorage) for this client
+      let existingInv = savedInvoices.find(inv =>
+        (inv.clientName && client.name && inv.clientName.trim().toLowerCase() === client.name.trim().toLowerCase()) ||
+        (inv.id && (inv.id === client.id || inv.id === clientId))
+      )
+
+      if (!existingInv) {
+        try {
+          const raw = localStorage.getItem('galileo_invoices')
+          const list = raw ? JSON.parse(raw) : []
+          existingInv = list.find(inv =>
+            (inv.clientName && client.name && inv.clientName.trim().toLowerCase() === client.name.trim().toLowerCase()) ||
+            (inv.id && (inv.id === client.id || inv.id === clientId))
+          )
+        } catch (e) {}
+      }
+
+      const existingDiscount = existingInv ? existingInv.discount : invoiceData.discount
+      const existingPaid = existingInv ? (existingInv.amountPaid || 0) : invoiceData.amountPaid
+      const existingPayments = existingInv && Array.isArray(existingInv.payments) ? existingInv.payments : (invoiceData.payments || [])
+      const existingInvoiceNo = existingInv ? existingInv.invoiceNo : (invoiceData.invoiceNo || `INV-${Date.now().toString().slice(-6)}`)
+      const existingId = existingInv ? existingInv.id : undefined
+
       // 3. Recalculate financials and update invoice state
-      const math = recalculateFinancials(importedItems, importedTicketPassengers, invoiceData.discount, invoiceData.amountPaid)
+      const math = recalculateFinancials(importedItems, importedTicketPassengers, existingDiscount, existingPaid)
 
       setInvoiceData(prev => ({
         ...prev,
+        ...(existingId ? { id: existingId } : {}),
+        invoiceNo: existingInvoiceNo,
         clientName: client.name || '',
         phone: client.phone || client.header?.phone || '',
         whatsapp: client.whatsapp || client.header?.whatsapp || '',
         email: client.email || client.header?.email || '',
         ticketPassengers: importedTicketPassengers,
         items: importedItems,
+        payments: existingPayments,
+        discount: existingDiscount,
+        amountPaid: existingPaid,
         conversionRate: rateMultiplier,
         ...math
       }))
 
-      toast.success(`Imported client: ${client.name} (${importedTicketPassengers.length} pax, rate multiplier x${rateMultiplier})`)
+      if (existingInv) {
+        toast.success(`Loaded saved invoice & payments for ${client.name} (${importedTicketPassengers.length} pax)`)
+      } else {
+        toast.success(`Imported client: ${client.name} (${importedTicketPassengers.length} pax, rate multiplier x${rateMultiplier})`)
+      }
     }
   }
+
+  // Auto-import client when importId query parameter is present in URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search)
+    const importId = searchParams.get('importId')
+    if (importId) {
+      let match = savedClients.find(c => c.id === importId || (c.sr_no && String(c.sr_no) === String(importId)))
+      if (!match) {
+        try {
+          const raw = localStorage.getItem('galileo_clients')
+          const list = raw ? JSON.parse(raw) : []
+          match = list.find(c => c.id === importId || (c.sr_no && String(c.sr_no) === String(importId)))
+        } catch (e) {}
+      }
+      if (match) {
+        handleSelectClient(match.id)
+      }
+    }
+  }, [location.search, savedClients])
 
   const handleAddItem = () => {
     const updatedItems = [...invoiceData.items, { description: 'EXTRA SERVICE / CHARGE', amount: 0 }]
@@ -371,6 +417,7 @@ export default function Invoice({ defaultView = 'list' }) {
       }
       updatedList[existingIndex] = updatedRecord
       setSavedInvoices(updatedList)
+      saveServerInvoices(updatedList)
       setInvoiceData(prev => ({ ...prev, id: targetId }))
       toast.success(`Invoice ${invoiceData.invoiceNo} record updated successfully!`)
     } else {
@@ -381,15 +428,21 @@ export default function Invoice({ defaultView = 'list' }) {
         createdAt: new Date().toISOString()
       }
       setInvoiceData(prev => ({ ...prev, id: newId }))
-      setSavedInvoices(prev => [newRecord, ...prev])
+      setSavedInvoices(prev => {
+        const updated = [newRecord, ...prev]
+        saveServerInvoices(updated)
+        return updated
+      })
       toast.success(`Invoice ${invoiceData.invoiceNo} record saved successfully!`)
     }
   }
 
-
-
   const handleDeleteInvoice = (id) => {
-    setSavedInvoices(prev => prev.filter(i => i.id !== id))
+    setSavedInvoices(prev => {
+      const updated = prev.filter(i => i.id !== id)
+      deleteServerInvoice(id)
+      return updated
+    })
     toast.success('Invoice deleted from history')
   }
 
@@ -687,18 +740,38 @@ toast.error('PDF download error, opening print window...', { id: 'inv-pdf' })
                 )}
 
                 {savedClients.length > 0 && (
-                  <div className="flex items-center gap-1.5 bg-slate-800 p-1.5 rounded-xl border border-slate-700">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-800 p-1.5 rounded-xl border border-slate-700">
                     <span className="text-[10px] font-bold text-slate-400 uppercase px-1">Import Client:</span>
+                    <input
+                      type="text"
+                      placeholder="Search SR# or Name..."
+                      value={clientSearchTerm}
+                      onChange={(e) => setClientSearchTerm(e.target.value)}
+                      className="bg-slate-900 text-slate-200 text-xs font-semibold px-2 py-1 rounded-lg border border-slate-700 focus:outline-none w-32"
+                    />
                     <select
-                      onChange={(e) => handleSelectClient(e.target.value)}
+                      onChange={(e) => {
+                        handleSelectClient(e.target.value)
+                        setClientSearchTerm('')
+                      }}
                       className="bg-slate-900 text-slate-300 text-xs font-bold px-2 py-1 rounded-lg border border-slate-700 focus:outline-none max-w-[170px] truncate cursor-pointer"
                     >
-                      <option value="">-- Select Raw Client --</option>
-                      {savedClients.map((c) => (
-                        <option key={`sel-${c.id}`} value={c.id}>
-                          {c.name} ({c.sr_no || '01'})
-                        </option>
-                      ))}
+                      <option value="">-- Select Client --</option>
+                      {savedClients
+                        .filter(c => {
+                          if (!clientSearchTerm) return true
+                          const term = clientSearchTerm.toLowerCase()
+                          return (
+                            (c.name && c.name.toLowerCase().includes(term)) ||
+                            (c.sr_no && String(c.sr_no).toLowerCase().includes(term)) ||
+                            (c.id && String(c.id).toLowerCase().includes(term))
+                          )
+                        })
+                        .map((c) => (
+                          <option key={`sel-${c.id}`} value={c.id}>
+                            SR#{c.sr_no || '01'} - {c.name}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 )}
@@ -984,7 +1057,7 @@ toast.error('PDF download error, opening print window...', { id: 'inv-pdf' })
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-blue-800 uppercase mb-1">AMOUNT RECEIVED (PAID)</label>
+                      <label className="block text-[10px] font-bold text-blue-800 uppercase mb-1">TOTAL AMOUNT RECEIVED (PAID)</label>
                       <input
                         type="number"
                         value={invoiceData.amountPaid}
@@ -998,9 +1071,83 @@ toast.error('PDF download error, opening print window...', { id: 'inv-pdf' })
                     </div>
                   </div>
 
+                  {/* MULTIPLE PAYMENT RECEIPTS HISTORY */}
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-1.5">
+                      <span className="font-bold text-[11px] text-slate-800 uppercase flex items-center gap-1">
+                        <i className="ti ti-receipt-2 text-emerald-600" /> Multiple Payment Receipts ({(invoiceData.payments || []).length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddPaymentItem}
+                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer"
+                      >
+                        <i className="ti ti-plus" /> Add Payment Receipt
+                      </button>
+                    </div>
+
+                    {(invoiceData.payments || []).length > 0 && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {(invoiceData.payments || []).map((pm, idx) => (
+                          <div key={`inv-pm-${idx}`} className="bg-white p-2 rounded border border-slate-200 space-y-1.5">
+                            <div className="grid grid-cols-12 gap-1 items-center">
+                              <input
+                                type="date"
+                                value={pm.date || invoiceData.invoiceDate}
+                                onChange={(e) => handleUpdatePaymentItem(idx, 'date', e.target.value)}
+                                className="col-span-4 border rounded px-1.5 py-0.5 text-[10px] font-mono"
+                              />
+                              <input
+                                type="text"
+                                value={pm.voucherNo || ''}
+                                onChange={(e) => handleUpdatePaymentItem(idx, 'voucherNo', e.target.value)}
+                                className="col-span-4 border rounded px-1.5 py-0.5 text-[10px] font-mono font-bold"
+                                placeholder="RV-101"
+                              />
+                              <input
+                                type="number"
+                                value={pm.amount || ''}
+                                onChange={(e) => handleUpdatePaymentItem(idx, 'amount', Number(e.target.value))}
+                                className="col-span-3 border rounded px-1.5 py-0.5 text-[10px] font-mono font-bold text-right text-emerald-700"
+                                placeholder="Amount"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePaymentItem(idx)}
+                                className="col-span-1 text-center text-red-500 hover:text-red-700"
+                              >
+                                <i className="ti ti-trash text-xs" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1">
+                              <select
+                                value={pm.paymentMethod || 'Bank Transfer'}
+                                onChange={(e) => handleUpdatePaymentItem(idx, 'paymentMethod', e.target.value)}
+                                className="border rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 bg-slate-50"
+                              >
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Online / Raast">Online / Raast</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Card">Card Payment</option>
+                              </select>
+                              <input
+                                type="text"
+                                value={pm.description || ''}
+                                onChange={(e) => handleUpdatePaymentItem(idx, 'description', e.target.value)}
+                                className="border rounded px-1.5 py-0.5 text-[10px]"
+                                placeholder="Remarks / Ref"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">PAYMENT METHOD</label>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">DEFAULT METHOD</label>
                       <select
                         value={invoiceData.paymentMethod}
                         onChange={(e) => setInvoiceData({ ...invoiceData, paymentMethod: e.target.value })}
@@ -1090,6 +1237,7 @@ toast.error('PDF download error, opening print window...', { id: 'inv-pdf' })
                       hotelItems={invoiceData.hotelItems || []}
                       transportItems={invoiceData.transportItems || []}
                       items={invoiceData.items}
+                      payments={invoiceData.payments || []}
                       subtotal={invoiceData.subtotal}
                       discount={Number(invoiceData.discount || 0)}
                       totalAmount={invoiceData.totalAmount}

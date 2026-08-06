@@ -6,9 +6,7 @@ export async function fetchServerClients() {
   try {
     const res = await axios.get(`${API_BASE}/clients`)
     if (res.data && res.data.success && Array.isArray(res.data.clients)) {
-      if (res.data.clients.length > 0) {
-        localStorage.setItem('galileo_clients', JSON.stringify(res.data.clients))
-      }
+      localStorage.setItem('galileo_clients', JSON.stringify(res.data.clients))
       return res.data.clients
     }
   } catch (err) {
@@ -33,6 +31,14 @@ export async function saveServerClients(clients) {
 
 export async function deleteServerClient(clientId) {
   try {
+    const stored = localStorage.getItem('galileo_clients')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      const filtered = parsed.filter(c => (c.id || c.client_id) !== clientId)
+      localStorage.setItem('galileo_clients', JSON.stringify(filtered))
+    }
+  } catch (e) {}
+  try {
     await axios.delete(`${API_BASE}/clients/${clientId}`)
   } catch (err) {
     console.warn('Backend API client delete error:', err.message)
@@ -43,9 +49,7 @@ export async function fetchServerInvoices() {
   try {
     const res = await axios.get(`${API_BASE}/invoices`)
     if (res.data && res.data.success && Array.isArray(res.data.invoices)) {
-      if (res.data.invoices.length > 0) {
-        localStorage.setItem('galileo_invoices', JSON.stringify(res.data.invoices))
-      }
+      localStorage.setItem('galileo_invoices', JSON.stringify(res.data.invoices))
       return res.data.invoices
     }
   } catch (err) {
@@ -70,6 +74,14 @@ export async function saveServerInvoices(invoices) {
 
 export async function deleteServerInvoice(invoiceId) {
   try {
+    const stored = localStorage.getItem('galileo_invoices')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      const filtered = parsed.filter(i => (i.id || i.invoice_id) !== invoiceId)
+      localStorage.setItem('galileo_invoices', JSON.stringify(filtered))
+    }
+  } catch (e) {}
+  try {
     await axios.delete(`${API_BASE}/invoices/${invoiceId}`)
   } catch (err) {
     console.warn('Backend API invoice delete error:', err.message)
@@ -80,9 +92,7 @@ export async function fetchServerContacts() {
   try {
     const res = await axios.get(`${API_BASE}/contacts`)
     if (res.data && res.data.success && Array.isArray(res.data.contacts)) {
-      if (res.data.contacts.length > 0) {
-        localStorage.setItem('galileo_contacts', JSON.stringify(res.data.contacts))
-      }
+      localStorage.setItem('galileo_contacts', JSON.stringify(res.data.contacts))
       return res.data.contacts
     }
   } catch (err) {
@@ -106,6 +116,14 @@ export async function saveServerContacts(contacts) {
 }
 
 export async function deleteServerContact(contactId) {
+  try {
+    const stored = localStorage.getItem('galileo_contacts')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      const filtered = parsed.filter(c => (c.id || c.contact_id) !== contactId)
+      localStorage.setItem('galileo_contacts', JSON.stringify(filtered))
+    }
+  } catch (e) {}
   try {
     await axios.delete(`${API_BASE}/contacts/${contactId}`)
   } catch (err) {

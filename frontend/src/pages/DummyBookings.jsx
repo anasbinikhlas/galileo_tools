@@ -680,9 +680,7 @@ No markdown wrappers outside json.`
         <h2 className="text-sm md:text-base font-semibold text-gray-900 uppercase tracking-wide flex items-center gap-1.5">
           {getOverallSummaryTitle()}
         </h2>
-        <div className="w-5 h-5 rounded-full bg-black text-white flex items-center justify-center text-xs shrink-0">
-          ✓
-        </div>
+        {/* Removed checkmark arrow */}
       </div>
 
       {/* Flight Sectors Render */}
@@ -813,8 +811,8 @@ No markdown wrappers outside json.`
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide flex items-center gap-2">
                   <i className="ti ti-building-hospital text-gray-700" /> HOTEL ACCOMMODATION #{index + 1} - {h.city || 'HOTEL'}, {h.country}
                 </h3>
-                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                  {h.status || 'Confirmed'} ✓
+                <span className="text-xs font-bold text-gray-900">
+                  {h.status || 'Confirmed'}
                 </span>
               </div>
 

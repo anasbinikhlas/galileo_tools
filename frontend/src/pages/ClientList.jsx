@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { ColorPdfTemplate, StandardPdfTemplate } from '../components/VoucherTemplates'
-import { fetchServerClients, saveServerClients, deleteServerClient } from '../api/sync'
+import { fetchServerClients, saveServerClients, deleteServerClient, fetchServerInvoices } from '../api/sync'
 
 export default function ClientList() {
   const navigate = useNavigate()
@@ -11,6 +11,15 @@ export default function ClientList() {
   const [savedClients, setSavedClients] = useState(() => {
     try {
       const stored = localStorage.getItem('galileo_clients')
+      return stored ? JSON.parse(stored) : []
+    } catch (e) {
+      return []
+    }
+  })
+
+  const [savedInvoices, setSavedInvoices] = useState(() => {
+    try {
+      const stored = localStorage.getItem('galileo_invoices')
       return stored ? JSON.parse(stored) : []
     } catch (e) {
       return []
@@ -25,34 +34,35 @@ export default function ClientList() {
 
   useEffect(() => {
     fetchServerClients().then(data => {
-      if (Array.isArray(data) && data.length > 0) setSavedClients(data)
+      if (Array.isArray(data)) setSavedClients(data)
+    })
+    fetchServerInvoices().then(data => {
+      if (Array.isArray(data)) setSavedInvoices(data)
     })
   }, [])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('galileo_clients', JSON.stringify(savedClients))
-      saveServerClients(savedClients)
-    } catch (e) {
-      console.error('Failed to sync client list to localStorage', e)
-    }
-  }, [savedClients])
-
   const handleToggleStatus = (id) => {
-    setSavedClients(prev => prev.map(c => {
-      if (c.id === id) {
-        const nextStatus = (c.status === 'Complete' || c.status === 'Completed') ? 'In Process' : 'Complete'
-        toast.success(`Client status updated to ${nextStatus}`, { id: `status-${id}` })
-        return { ...c, status: nextStatus, updatedAt: new Date().toISOString() }
-      }
-      return c
-    }))
+    setSavedClients(prev => {
+      const updated = prev.map(c => {
+        if (c.id === id) {
+          const nextStatus = (c.status === 'Complete' || c.status === 'Completed') ? 'In Process' : 'Complete'
+          toast.success(`Client status updated to ${nextStatus}`, { id: `status-${id}` })
+          return { ...c, status: nextStatus, updatedAt: new Date().toISOString() }
+        }
+        return c
+      })
+      saveServerClients(updated)
+      return updated
+    })
   }
 
   const handleDeleteClient = (id, name) => {
     if (window.confirm(`Are you sure you want to delete client record for "${name}"?`)) {
-      setSavedClients(prev => prev.filter(c => c.id !== id))
-      deleteServerClient(id)
+      setSavedClients(prev => {
+        const updated = prev.filter(c => c.id !== id)
+        deleteServerClient(id)
+        return updated
+      })
       toast.success(`Client record deleted`, { id: `del-${id}` })
     }
   }
@@ -297,6 +307,7 @@ export default function ClientList() {
                     <th className="p-3">PAX (ADT/CH/INF)</th>
                     <th className="p-3">DEP SECTOR</th>
                     <th className="p-3">PACKAGE TOTAL</th>
+                    <th className="p-3 text-center">INVOICE</th>
                     <th className="p-3 text-center">STATUS</th>
                     <th className="p-3 text-right">ACTIONS</th>
                   </tr>
@@ -306,6 +317,21 @@ export default function ClientList() {
                     const isComplete = client.status === 'Complete' || client.status === 'Completed'
                     const displayStatus = isComplete ? 'Complete' : 'In Process'
                     const depDateStr = client.depFlight?.date || client.departureDate || client.depDate || '—'
+
+                    const hasInvoice = savedInvoices.find(inv => {
+                      if (!inv) return false
+                      const clientNameClean = (client.name || '').trim().toLowerCase()
+                      const invNameClean = (inv.clientName || '').trim().toLowerCase()
+
+                      const matchName = clientNameClean && invNameClean && (
+                        invNameClean === clientNameClean ||
+                        invNameClean.includes(clientNameClean) ||
+                        clientNameClean.includes(invNameClean)
+                      )
+                      const matchId = inv.id && (inv.id === client.id || inv.clientId === client.id)
+                      const matchSr = inv.sr_no && client.sr_no && String(inv.sr_no) === String(client.sr_no)
+                      return matchName || matchId || matchSr
+                    })
 
                     return (
                       <tr key={client.id} className="hover:bg-gray-50/80 transition-colors">
@@ -321,6 +347,25 @@ export default function ClientList() {
                         </td>
                         <td className="p-3 font-bold text-emerald-700">
                           {client.totals?.package_with_ticket || client.totals?.package_only || '—'}
+                        </td>
+                        <td className="p-3 text-center">
+                          {hasInvoice ? (
+                            <button
+                              onClick={() => navigate(`/create-invoice?importId=${client.id}`)}
+                              title={`Open Invoice: ${hasInvoice.invoiceNo}`}
+                              className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 cursor-pointer transition-all shadow-2xs"
+                            >
+                              <i className="ti ti-receipt text-xs" /> {hasInvoice.invoiceNo}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate(`/create-invoice?importId=${client.id}`)}
+                              title="Click to generate invoice for client"
+                              className="text-[11px] font-semibold text-gray-400 hover:text-purple-600 hover:underline cursor-pointer"
+                            >
+                              No Invoice
+                            </button>
+                          )}
                         </td>
                         <td className="p-3 text-center">
                           <button

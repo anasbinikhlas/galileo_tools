@@ -502,6 +502,50 @@ Generated via Travel Agent Suite by Omaanu`
     })
   }
 
+  // Save record state persistence
+  const handleSaveSalesReport = () => {
+    try {
+      const dataToSave = {
+        rows,
+        groupParticular,
+        groupVender,
+        singleVendorAndParticular,
+        updatedAt: new Date().toISOString()
+      }
+      localStorage.setItem('galileo_saved_sales_report', JSON.stringify(dataToSave))
+      toast.success('Sales report record saved! It will load automatically next time.', { id: 'save-sales-report' })
+    } catch (e) {
+      toast.error('Failed to save sales record to storage')
+    }
+  }
+
+  const handleResetToPackageDefaults = () => {
+    try {
+      localStorage.removeItem('galileo_saved_sales_report')
+      setRows(buildInitialRows())
+      setGroupParticular(defaultGroupParticular)
+      setGroupVender(defaultGroupVender)
+      toast.success('Reset sales report to current package defaults')
+    } catch (e) {}
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const stored = localStorage.getItem('galileo_saved_sales_report')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+            setRows(parsed.rows)
+            if (parsed.groupParticular !== undefined) setGroupParticular(parsed.groupParticular)
+            if (parsed.groupVender !== undefined) setGroupVender(parsed.groupVender)
+            if (parsed.singleVendorAndParticular !== undefined) setSingleVendorAndParticular(parsed.singleVendorAndParticular)
+          }
+        }
+      } catch (e) {}
+    }
+  }, [isOpen])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-5 overflow-y-auto">
       <div className="bg-white w-full max-w-6xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col my-auto max-h-[95vh]">
@@ -521,13 +565,29 @@ Generated via Travel Agent Suite by Omaanu`
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Close modal"
-          >
-            <i className="ti ti-x text-lg" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveSalesReport}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-400 shadow-sm flex items-center gap-1 cursor-pointer transition-all"
+              title="Save entered details so they reload automatically"
+            >
+              <i className="ti ti-device-floppy text-sm" /> Save Record
+            </button>
+            <button
+              onClick={handleResetToPackageDefaults}
+              className="bg-white/10 hover:bg-white/20 text-emerald-100 hover:text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-white/20 transition-all cursor-pointer"
+              title="Reset to current package defaults"
+            >
+              <i className="ti ti-rotate-2 text-sm" /> Reset
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              title="Close modal"
+            >
+              <i className="ti ti-x text-lg" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

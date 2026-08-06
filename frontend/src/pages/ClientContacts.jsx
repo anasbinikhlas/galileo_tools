@@ -26,18 +26,9 @@ export default function ClientContacts() {
 
   useEffect(() => {
     fetchServerContacts().then(data => {
-      if (Array.isArray(data) && data.length > 0) setContacts(data)
+      if (Array.isArray(data)) setContacts(data)
     })
   }, [])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('galileo_contacts', JSON.stringify(contacts))
-      saveServerContacts(contacts)
-    } catch (e) {
-      console.error('Failed to sync contacts to localStorage', e)
-    }
-  }, [contacts])
 
   const handleOpenAdd = () => {
     setEditingContact(null)
@@ -65,11 +56,15 @@ export default function ClientContacts() {
     }
 
     if (editingContact) {
-      setContacts(prev => prev.map(c => c.id === editingContact.id ? {
-        ...c,
-        ...formData,
-        updatedAt: new Date().toISOString()
-      } : c))
+      setContacts(prev => {
+        const updated = prev.map(c => c.id === editingContact.id ? {
+          ...c,
+          ...formData,
+          updatedAt: new Date().toISOString()
+        } : c)
+        saveServerContacts(updated)
+        return updated
+      })
       toast.success('Contact updated successfully')
     } else {
       const newContact = {
@@ -80,7 +75,11 @@ export default function ClientContacts() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
-      setContacts(prev => [newContact, ...prev])
+      setContacts(prev => {
+        const updated = [newContact, ...prev]
+        saveServerContacts(updated)
+        return updated
+      })
       toast.success('New contact added to directory')
     }
 
@@ -89,7 +88,11 @@ export default function ClientContacts() {
 
   const handleDeleteContact = (id, name) => {
     if (window.confirm(`Are you sure you want to delete contact for "${name}"?`)) {
-      setContacts(prev => prev.filter(c => c.id !== id))
+      setContacts(prev => {
+        const updated = prev.filter(c => c.id !== id)
+        deleteServerContact(id)
+        return updated
+      })
       toast.success('Contact deleted')
     }
   }
@@ -126,6 +129,55 @@ export default function ClientContacts() {
     toast.success('Contacts exported to CSV')
   }
 
+  const handleImportCSV = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      try {
+        const text = event.target.result || ''
+        const lines = text.split(/\r\n|\n/).filter(line => line.trim())
+        if (lines.length <= 1) {
+          toast.error('CSV file is empty or missing data rows')
+          return
+        }
+
+        const newImported = []
+        for (let i = 1; i < lines.length; i++) {
+          const row = lines[i].split(',').map(val => val.replace(/^"|"$/g, '').trim())
+          if (row[0]) {
+            newImported.push({
+              id: 'cnt_' + Date.now() + '_' + i,
+              name: row[0] || '',
+              phone: row[1] || '',
+              whatsapp: row[2] || '',
+              email: row[3] || '',
+              source: row[4] || 'CSV Import',
+              notes: row[5] || '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            })
+          }
+        }
+
+        if (newImported.length > 0) {
+          setContacts(prev => {
+            const updated = [...newImported, ...prev]
+            saveServerContacts(updated)
+            return updated
+          })
+          toast.success(`Successfully imported ${newImported.length} contact(s) from CSV!`)
+        } else {
+          toast.error('Could not find valid contact names in CSV file')
+        }
+      } catch (err) {
+        toast.error('Failed to parse CSV file')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   const filteredContacts = contacts.filter(c => {
     const term = searchTerm.toLowerCase()
     return (
@@ -152,11 +204,21 @@ export default function ClientContacts() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm cursor-pointer">
+            <i className="ti ti-file-import text-base text-blue-600" />
+            Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleImportCSV}
+              className="hidden"
+            />
+          </label>
           <button
             onClick={exportToCSV}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 shadow-sm"
           >
-            <i className="ti ti-file-export text-base" />
+            <i className="ti ti-file-export text-base text-emerald-600" />
             Export CSV
           </button>
           <button

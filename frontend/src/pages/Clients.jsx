@@ -307,8 +307,9 @@ function parseGalileoTerminalText(rawText) {
   let infantCount = 0
 
   // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE & GDS MODIFIERS
-  // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 6.I/1SURNAME/GIVEN*20JUN25
-  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*(?:(I|FI|INF)(?:[/\-]\d*|\d+[/\-]))?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
+  // Passenger regex matching any occurrence of number tag SURNAME/GIVEN TITLE & GDS MODIFIERS
+  // Matches: 1.1SURNAME/GIVEN, 5.1SURNAME/GIVEN*P-C05, 6.I/1SURNAME/GIVEN*20JUN25, 1.1MUHAMMAD ANAS/IKHLAS MR
+  const paxRegex = /(?:^|\s+)\d+(?:\.\d*)?\s*(?:(I|FI|INF)(?:[/\-]\d*|\d+[/\-]))?\s*([A-Z\s]+)\/([A-Z0-9\s()\*\./-]+?)(?=\s+\d+(?:\.\d*)?|\s*$)/gi
 
   for (const line of lines) {
     // 1. Scan line for passenger tokens (multi-passenger line support)
@@ -316,7 +317,7 @@ function parseGalileoTerminalText(rawText) {
     const linePaxRegex = new RegExp(paxRegex)
     while ((paxMatch = linePaxRegex.exec(line)) !== null) {
       const infantPrefix = paxMatch[1] // 'I', 'FI', or 'INF' if present
-      const surname = paxMatch[2].toUpperCase()
+      const surname = paxMatch[2].trim().toUpperCase()
       const rawGivenAndMods = paxMatch[3].trim().toUpperCase()
 
       let isChild = false
@@ -331,7 +332,7 @@ function parseGalileoTerminalText(rawText) {
       // Check for Infant tags: *P-I01, *I01, (INF), *INF, INF
       if (/(\*P-I|\*I\d|\(INF\)|INF)/i.test(rawGivenAndMods)) {
         isInfant = true
-        const infNameMatch = rawGivenAndMods.match(/(?:\*P-I|\*I|\(INF\)|INF)[0-9]*[/\s]+(?:[A-Z]+\/)?([A-Z\s]+)/i)
+        const infNameMatch = rawGivenAndMods.match(/(?:\*P-I|\*I|\(INF\)|INF)[0-9]*[/\s]+(?:[A-Z\s]+\/)?([A-Z\s]+)/i)
         if (infNameMatch && infNameMatch[1]) {
           const rawInf = infNameMatch[1].trim()
           infantName = `${rawInf} ${surname}`.trim()
@@ -381,9 +382,9 @@ function parseGalileoTerminalText(rawText) {
 
     // Fallback single line passenger match
     if (passengers.length === 0) {
-      const singlePaxMatch = line.match(/^\d+(?:\.\d*)?\s*([A-Z]+)\/([A-Z0-9\s()\*\./-]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER))?$/i)
+      const singlePaxMatch = line.match(/^\d+(?:\.\d*)?\s*([A-Z\s]+)\/([A-Z0-9\s()\*\./-]+?)(?:\s+(MR|MRS|MS|MISS|MSTR|INF|CHD|ADT|DR|PROF|MASTER))?$/i)
       if (singlePaxMatch) {
-        const surname = singlePaxMatch[1].toUpperCase()
+        const surname = singlePaxMatch[1].trim().toUpperCase()
         let cleanGiven = singlePaxMatch[2].trim().toUpperCase()
         cleanGiven = cleanGiven
           .replace(/\*P-[A-Z0-9]+(\/[A-Z0-9/]+)?/gi, '')
@@ -1040,18 +1041,9 @@ export default function Clients() {
 
   useEffect(() => {
     fetchServerClients().then(data => {
-      if (Array.isArray(data) && data.length > 0) setSavedClients(data)
+      if (Array.isArray(data)) setSavedClients(data)
     })
   }, [])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('galileo_clients', JSON.stringify(savedClients))
-      saveServerClients(savedClients)
-    } catch (e) {
-      console.error('Failed to save clients to localStorage', e)
-    }
-  }, [savedClients])
 
   // GLOBAL CLIPBOARD PASTE EVENT LISTENER (Ctrl+V Image Paste)
   useEffect(() => {
@@ -1798,13 +1790,22 @@ export default function Clients() {
     syncContactDirectory(clientRecord)
 
     if (editingId) {
-      setSavedClients(prev => prev.map(c => c.id === editingId ? clientRecord : c))
+      setSavedClients(prev => {
+        const updated = prev.map(c => c.id === editingId ? clientRecord : c)
+        saveServerClients(updated)
+        return updated
+      })
       toast.success(`Updated client record "${header.name}" with new changes!`, { id: 'update-success' })
     } else {
-      setSavedClients(prev => [clientRecord, ...prev])
+      setSavedClients(prev => {
+        const updated = [clientRecord, ...prev]
+        saveServerClients(updated)
+        return updated
+      })
       setEditingId(clientRecord.id)
       toast.success(`Client "${header.name}" saved with status: ${status}`, { id: 'save-success' })
     }
+    return clientRecord.id
   }
 
   // PDF Export
@@ -1975,8 +1976,15 @@ export default function Clients() {
             </button>
             <button
               type="button"
-              onClick={handleOpenInvoiceModal}
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-sm"
+              onClick={() => {
+                let targetId = editingId
+                if (header.name.trim()) {
+                  targetId = handleSaveClient() || editingId
+                }
+                targetId = targetId || header.sr_no || '01'
+                navigate(`/create-invoice?importId=${targetId}`)
+              }}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1 shadow-sm cursor-pointer"
             >
               <i className="ti ti-receipt text-sm" /> Create Invoice
             </button>

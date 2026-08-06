@@ -750,8 +750,19 @@ export function InvoicePdfTemplate({
   const safeVisas = Array.isArray(visaPassengers) ? visaPassengers.filter(v => v && (v.passengerName || v.pax || v.visaType || v.type)) : []
   const safeHotels = Array.isArray(hotelItems) ? hotelItems.filter(h => h && (h.hotelName || h.description || h.checkIn)) : []
   const safeTransports = Array.isArray(transportItems) ? transportItems.filter(t => t && (t.vehicleType || t.description || t.sector)) : []
-  const safeItems = Array.isArray(items) ? items.filter(i => i && (i.description || i.remarks || i.amount)) : []
+  
+  const hasSpecificSections = safePassengers.length > 0 || safeVisas.length > 0 || safeHotels.length > 0 || safeTransports.length > 0
+  const safeItems = Array.isArray(items) 
+    ? items.filter(i => i && (i.description || i.remarks || i.amount) && (Number(i.amount || 0) > 0 || !hasSpecificSections)) 
+    : []
   const safePayments = Array.isArray(payments) ? payments.filter(p => p && (p.voucherNo || p.amount)) : []
+
+  const BANK_DETAILS_LIST = [
+    { title: 'ZUYUFUR RAHMAN HAJJ & UMRAH', bankName: 'Meezan Bank Ltd', accountNo: '01020304050607' },
+    { title: 'ZUYUFUR RAHMAN HAJJ & UMRAH', bankName: 'Bank Alfalah Ltd', accountNo: '001002003004' },
+    { title: 'ZUYUFUR RAHMAN HAJJ & UMRAH', bankName: 'Habib Bank Ltd (HBL)', accountNo: '1234567890123' },
+    { title: 'ZUYUFUR RAHMAN HAJJ & UMRAH', bankName: 'Faysal Bank', accountNo: '9876543210987' }
+  ]
 
   const ticketTotalSum = safePassengers.reduce((sum, p) => sum + Number(p.amount || 0), 0)
   const visaTotalSum = safeVisas.reduce((sum, v) => sum + Number(v.amount || 0), 0)
@@ -1081,25 +1092,25 @@ export function InvoicePdfTemplate({
           <div className="w-full sm:w-80 border border-gray-400 rounded-lg overflow-hidden bg-white text-xs font-mono">
             <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-gray-600 font-bold">
               <span>Subtotal Amount</span>
-              <span>{Number(subtotal || (grandSalesTotal + Number(discount || 0))).toLocaleString()}</span>
+              <span>{Number(subtotal || (grandSalesTotal + Number(discount || 0)) || 0).toLocaleString()}</span>
             </div>
             {Number(discount || 0) > 0 && (
               <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-amber-800 font-bold bg-amber-50/50">
                 <span>Less Discount</span>
-                <span>- {Number(discount).toLocaleString()}</span>
+                <span>- {Number(discount || 0).toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-gray-900 font-black">
               <span>Net Total Amount</span>
-              <span>{grandSalesTotal.toLocaleString()}</span>
+              <span>{Number(grandSalesTotal || 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between p-1.5 px-3 border-b border-gray-200 text-emerald-800 font-bold">
               <span>Less Receipts (Paid)</span>
-              <span>{Number(amountPaid).toLocaleString()}</span>
+              <span>{Number(amountPaid || 0).toLocaleString()}</span>
             </div>
-            <div className={`flex justify-between p-2 px-3 font-black text-sm ${Number(balanceDue) > 0 ? 'bg-red-50 text-red-700 border-t-2 border-red-400' : 'bg-emerald-50 text-emerald-800'}`}>
+            <div className={`flex justify-between p-2 px-3 font-black text-sm ${Number(balanceDue || 0) > 0 ? 'bg-red-50 text-red-700 border-t-2 border-red-400' : 'bg-emerald-50 text-emerald-800'}`}>
               <span>Net Balance</span>
-              <span>{Number(balanceDue).toLocaleString()}</span>
+              <span>{Number(balanceDue || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
