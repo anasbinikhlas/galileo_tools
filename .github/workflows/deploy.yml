@@ -43,13 +43,17 @@ jobs:
 
       - name: 📦 Deploy frontend dist to server
         run: |
+          rsync -avz \
+            -e "ssh -p 65002 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=60" \
+            ./frontend/dist/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/
           rsync -avz --delete \
             -e "ssh -p 65002 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=60" \
             ./frontend/dist/ \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/home/u408469790/public_html/galileotools/frontend/dist/
           echo "--- Remote check (server dist folder) ---"
           ssh -p 65002 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=60 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "ls -la /home/u408469790/public_html/galileotools/frontend/dist/"
+            "ls -la /home/u408469790/public_html/galileotools/"
 
   deploy-backend:
     runs-on: ubuntu-latest
