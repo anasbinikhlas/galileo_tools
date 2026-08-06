@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import html2pdf from 'html2pdf.js'
 import { ColorPdfTemplate, StandardPdfTemplate } from '../components/VoucherTemplates'
-import PackageSalesReportModal from '../components/PackageSalesReportModal'
 
 // API Key configuration fallback
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ''
@@ -423,7 +422,6 @@ export default function Package() {
   const [userApiKey, setUserApiKey] = useState(apiKey || '')
   const [showKeyInput, setShowKeyInput] = useState(!apiKey)
   const [showPrintModal, setShowPrintModal] = useState(false) // false | 'standard' | 'color'
-  const [showSalesReportModal, setShowSalesReportModal] = useState(false)
   const [showCompanyDetails, setShowCompanyDetails] = useState(true)
 
   const fileRef = useRef(null)
@@ -646,14 +644,6 @@ export default function Package() {
             >
               <i className="ti ti-palette text-sm" />
               Color PDF Print
-            </button>
-            <button
-              onClick={() => setShowSalesReportModal(true)}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-md transition-all active:scale-95"
-              title="Generate 13-column Sales Report row for Excel"
-            >
-              <i className="ti ti-table text-sm" />
-              Sales Excel Row
             </button>
           </div>
         </div>
@@ -1656,23 +1646,6 @@ export default function Package() {
           </div>
         </div>
       )}
-
-      {/* Package Sales Report Excel Modal */}
-      <PackageSalesReportModal
-        isOpen={showSalesReportModal}
-        onClose={() => setShowSalesReportModal(false)}
-        packageData={{
-          header,
-          pax,
-          depFlight,
-          arrFlight,
-          visa,
-          makkahHotels,
-          madinaHotels,
-          transportRows,
-          comments
-        }}
-      />
     </div>
   )
 }
