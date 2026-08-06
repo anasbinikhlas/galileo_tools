@@ -144,6 +144,47 @@ export default function Dashboard() {
     }
   })
 
+  const handleExportData = () => {
+    try {
+      const exportObj = {
+        galileo_clients: JSON.parse(localStorage.getItem('galileo_clients') || '[]'),
+        galileo_invoices: JSON.parse(localStorage.getItem('galileo_invoices') || '[]'),
+        galileo_contacts: JSON.parse(localStorage.getItem('galileo_contacts') || '[]'),
+        galileo_company_profiles: JSON.parse(localStorage.getItem('galileo_company_profiles') || '[]'),
+        exported_at: new Date().toISOString()
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj, null, 2))
+      const downloadAnchor = document.createElement('a')
+      downloadAnchor.setAttribute("href", dataStr)
+      downloadAnchor.setAttribute("download", `tas_backup_${new Date().toISOString().slice(0, 10)}.json`)
+      document.body.appendChild(downloadAnchor)
+      downloadAnchor.click()
+      downloadAnchor.remove()
+    } catch (err) {
+      alert("Failed to export data: " + err.message)
+    }
+  }
+
+  const handleImportData = (e) => {
+    const fileReader = new FileReader()
+    if (e.target.files && e.target.files[0]) {
+      fileReader.readAsText(e.target.files[0], "UTF-8")
+      fileReader.onload = (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result)
+          if (parsed.galileo_clients) localStorage.setItem('galileo_clients', JSON.stringify(parsed.galileo_clients))
+          if (parsed.galileo_invoices) localStorage.setItem('galileo_invoices', JSON.stringify(parsed.galileo_invoices))
+          if (parsed.galileo_contacts) localStorage.setItem('galileo_contacts', JSON.stringify(parsed.galileo_contacts))
+          if (parsed.galileo_company_profiles) localStorage.setItem('galileo_company_profiles', JSON.stringify(parsed.galileo_company_profiles))
+          alert("Data imported successfully! Refreshing page...")
+          window.location.reload()
+        } catch (err) {
+          alert("Invalid backup JSON file: " + err.message)
+        }
+      }
+    }
+  }
+
   // Calculate live counts
   const totalCount = clients.length
   const completedCount = clients.filter(c => c.status === 'Complete' || c.status === 'Completed').length
@@ -278,6 +319,22 @@ export default function Dashboard() {
               <i className="ti ti-user-plus" />
               <span>+ Create New Client</span>
             </button>
+            <button
+              onClick={handleExportData}
+              title="Export all saved data to a JSON backup file"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs shadow-xs transition-colors"
+            >
+              <i className="ti ti-download" />
+              <span>Export Data</span>
+            </button>
+            <label
+              title="Import data from a JSON backup file"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              <i className="ti ti-upload" />
+              <span>Import Data</span>
+              <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+            </label>
             <button
               onClick={() => navigate('/client-list')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg font-bold text-xs shadow-xs transition-colors"
