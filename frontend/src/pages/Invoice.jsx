@@ -39,28 +39,20 @@ export default function Invoice({ defaultView = 'list' }) {
     invoiceNo: `INV-${Date.now().toString().slice(-6)}`,
     invoiceDate: new Date().toISOString().slice(0, 10),
     dueDate: '',
-    clientName: 'SYED ASIF RIZVI',
-    phone: '0333-0317285',
-    whatsapp: '0333-0317285',
+    clientName: '',
+    phone: '',
+    whatsapp: '',
     email: '',
-    ticketPassengers: [
-      { date: new Date().toISOString().slice(0, 10), invoiceNo: '13977', ticketNo: '176-5580-274-603', passengerName: 'SANNAN HASAN', sector: 'KHI-FRA 05/03/2026', classType: 'Y', amount: 221000 },
-      { date: new Date().toISOString().slice(0, 10), invoiceNo: '13977', ticketNo: '176-5580-274-604', passengerName: 'SYED SALMAN ASIF RIZVI', sector: 'KHI-FRA 05/03/2026', classType: 'Y', amount: 221000 }
-    ],
-    items: [
-      { description: '2 E-VISA PROCESSING', amount: 15000 },
-      { description: '4 STICKER VISAS', amount: 80000 },
-      { description: 'TRAVEL INSURANCE COVERAGE', amount: 7900 },
-      { description: 'TURKEY E-VISA (23000 x 2)', amount: 46000 }
-    ],
-    subtotal: 590900,
+    ticketPassengers: [],
+    items: [],
+    subtotal: 0,
     discount: '0',
-    totalAmount: 590900,
+    totalAmount: 0,
     amountPaid: '0',
-    balanceDue: 590900,
+    balanceDue: 0,
     status: 'UNPAID',
     paymentMethod: 'Bank Transfer',
-    bankDetails: 'Meezan Bank - A/C 0102030405',
+    bankDetails: '',
     remarks: 'Thank you for your business.',
     hideBreakup: false
   })
@@ -196,7 +188,7 @@ export default function Invoice({ defaultView = 'list' }) {
         ? client.passengerList 
         : (Array.isArray(client.passengers) && client.passengers.length > 0 ? client.passengers : [client.name || 'CLIENT'])
 
-      let flightSector = 'KHI-JED-KHI'
+      let flightSector = ''
       if (Array.isArray(client.ticketPassengers) && client.ticketPassengers.length > 0 && client.ticketPassengers[0].sector) {
         flightSector = client.ticketPassengers[0].sector
       } else if (Array.isArray(client.flightItinerary) && client.flightItinerary.length > 0) {
@@ -218,7 +210,7 @@ export default function Invoice({ defaultView = 'list' }) {
         if (dep.length === 2 && ret.length === 2 && dep[1] === ret[0]) {
           flightSector = `${dep[0]}-${dep[1]}-${ret[1]}`
         } else {
-          flightSector = [client.depFlight?.sector, client.retFlight?.sector].filter(Boolean).join(' - ') || 'KHI-JED-KHI'
+          flightSector = [client.depFlight?.sector, client.retFlight?.sector].filter(Boolean).join(' - ')
         }
       } else if (client.sector) {
         flightSector = client.sector
@@ -227,22 +219,27 @@ export default function Invoice({ defaultView = 'list' }) {
       const totalTicketAmt = Number(client.pax?.ticket_total || 0)
       const perPaxPrice = totalTicketAmt > 0 && paxList.length > 0 ? Math.round(totalTicketAmt / paxList.length) : 0
 
-      const importedTicketPassengers = paxList.map((p) => {
-        const pName = typeof p === 'string' ? p : (p.name || p.passengerName || client.name)
-        const pTicket = typeof p === 'object' && p !== null ? (p.ticket_no || p.ticketNo || '') : ''
-        const pPort = typeof p === 'object' && p !== null ? (p.passport_no || p.passportNo || '') : ''
+      let importedTicketPassengers = []
+      if (Array.isArray(client.ticketPassengers) && client.ticketPassengers.length > 0) {
+        importedTicketPassengers = client.ticketPassengers
+      } else if (totalTicketAmt > 0 || flightSector !== '') {
+        importedTicketPassengers = paxList.map((p) => {
+          const pName = typeof p === 'string' ? p : (p.name || p.passengerName || client.name)
+          const pTicket = typeof p === 'object' && p !== null ? (p.ticket_no || p.ticketNo || '') : ''
+          const pPort = typeof p === 'object' && p !== null ? (p.passport_no || p.passportNo || '') : ''
 
-        return {
-          date: client.date || client.header?.date || new Date().toISOString().slice(0, 10),
-          invoiceNo: invoiceData.invoiceNo || 'INV-1001',
-          ticketNo: pTicket,
-          passportNo: pPort,
-          passengerName: pName,
-          sector: flightSector,
-          classType: 'Y',
-          amount: perPaxPrice
-        }
-      })
+          return {
+            date: client.date || client.header?.date || new Date().toISOString().slice(0, 10),
+            invoiceNo: invoiceData.invoiceNo || 'INV-1001',
+            ticketNo: pTicket,
+            passportNo: pPort,
+            passengerName: pName,
+            sector: flightSector,
+            classType: 'Y',
+            amount: perPaxPrice
+          }
+        })
+      }
 
       // 2. Build Service Items from imported client (With currency rateMultiplier applied)
       let importedItems = []

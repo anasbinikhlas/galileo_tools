@@ -1128,7 +1128,7 @@ export default function Clients() {
 
     // 1. Ticket Section (ALL passenger names + sector + price)
     let autoPassengers = []
-    let flightSector = 'KHI-JED-KHI'
+    let flightSector = ''
     const validSectors = (flightItinerary || []).map(f => f.sector).filter(Boolean)
     if (validSectors.length > 1) {
       const first = (validSectors[0] || '').split('-').map(s => s.trim())
@@ -1157,7 +1157,7 @@ export default function Clients() {
       ? passengerList.map(n => n.trim()).filter(Boolean)
       : (header.name && header.name.trim() ? [header.name.trim()] : [])
 
-    if (totalPaxFromQuantities > 0) {
+    if (totalPaxFromQuantities > 0 && (ticketVal > 0 || flightSector !== '')) {
       let currentPaxIdx = 1
 
       // 1. Generate Adults
